@@ -1,0 +1,50 @@
+[
+  {
+    "term": "Savings account",
+    "meaning": "A bank account used to save money and earn interest."
+  },
+  {
+    "term": "Debit card",
+    "meaning": "A payment card that allows customers to spend money from their bank account."
+  },
+  {
+    "term": "Fraud detection",
+    "meaning": "The process of identifying suspicious or dishonest financial activity."
+  },
+  {
+    "term": "Digital banking",
+    "meaning": "Using online or mobile services to access banking services."
+  },
+  {
+    "term": "Fixed deposit (FD)",
+    "meaning": "Money deposited in a bank for a fixed period at an agreed interest rate."
+  },
+  {
+    "term": "Anti-money laundering (AML)",
+    "meaning": "Measures used to prevent criminals from disguising illegally obtained money."
+  },
+  {
+    "term": "Credit risk",
+    "meaning": "The risk that a borrower will not repay a loan as agreed."
+  },
+  {
+    "term": "Mobile banking",
+    "meaning": "Using a mobile phone to perform banking activities."
+  },
+  {
+    "term": "Financial inclusion",
+    "meaning": "Making financial services accessible to more people."
+  },
+  {
+    "term": "Loan origination",
+    "meaning": "The process of receiving and evaluating a loan application."
+  },
+  {
+    "term": "Cash reserve ratio (CRR)",
+    "meaning": "The required proportion of certain bank deposits that banks maintain as reserves with the central bank."
+  },
+  {
+    "term": "Automated clearing house (ACH)",
+    "meaning": "A system used to process electronic payments and transfers."
+  }
+]
