@@ -1,50 +1,502 @@
 [
   {
-    "term": "Savings account",
-    "meaning": "A bank account used to save money and earn interest."
+    "term": "Account reconciliation",
+    "meaning": "Comparing account records with supporting documents to find and correct differences."
   },
   {
-    "term": "Debit card",
-    "meaning": "A payment card that allows customers to spend money from their bank account."
-  },
-  {
-    "term": "Fraud detection",
-    "meaning": "The process of identifying suspicious or dishonest financial activity."
-  },
-  {
-    "term": "Digital banking",
-    "meaning": "Using online or mobile services to access banking services."
-  },
-  {
-    "term": "Fixed deposit (FD)",
-    "meaning": "Money deposited in a bank for a fixed period at an agreed interest rate."
+    "term": "Adjustable-rate mortgage (ARM)",
+    "meaning": "A home loan whose interest rate can change over time according to agreed terms."
   },
   {
     "term": "Anti-money laundering (AML)",
-    "meaning": "Measures used to prevent criminals from disguising illegally obtained money."
-  },
-  {
-    "term": "Credit risk",
-    "meaning": "The risk that a borrower will not repay a loan as agreed."
-  },
-  {
-    "term": "Mobile banking",
-    "meaning": "Using a mobile phone to perform banking activities."
-  },
-  {
-    "term": "Financial inclusion",
-    "meaning": "Making financial services accessible to more people."
-  },
-  {
-    "term": "Loan origination",
-    "meaning": "The process of receiving and evaluating a loan application."
-  },
-  {
-    "term": "Cash reserve ratio (CRR)",
-    "meaning": "The required proportion of certain bank deposits that banks maintain as reserves with the central bank."
+    "meaning": "Rules and processes used to detect and prevent money from illegal activities entering the financial system."
   },
   {
     "term": "Automated clearing house (ACH)",
-    "meaning": "A system used to process electronic payments and transfers."
+    "meaning": "A payment network that processes batches of electronic bank transfers."
+  },
+  {
+    "term": "Asset-liability management (ALM)",
+    "meaning": "Managing a bank's assets and liabilities to control risks and meet its obligations."
+  },
+  {
+    "term": "Asset under management (AUM)",
+    "meaning": "The total market value of investments that a financial institution manages for clients."
+  },
+  {
+    "term": "Balance sheet",
+    "meaning": "A financial statement showing assets, liabilities, and equity at a particular date."
+  },
+  {
+    "term": "Bank rate",
+    "meaning": "An interest rate a central bank charges banks for certain loans or lending facilities."
+  },
+  {
+    "term": "Basel III",
+    "meaning": "International banking standards designed to strengthen banks' capital, liquidity, and risk management."
+  },
+  {
+    "term": "Beneficiary account",
+    "meaning": "The account that receives money sent by a person or organization."
+  },
+  {
+    "term": "Bill discounting",
+    "meaning": "Receiving money for a bill before its due date, usually after a fee or discount is deducted."
+  },
+  {
+    "term": "Bond yield",
+    "meaning": "The return an investor earns from a bond, expressed as a rate."
+  },
+  {
+    "term": "Bridge loan",
+    "meaning": "A short-term loan used to cover a temporary funding gap until longer-term money becomes available."
+  },
+  {
+    "term": "Capital adequacy ratio (CAR)",
+    "meaning": "A measure comparing a bank's qualifying capital with its risk-weighted assets."
+  },
+  {
+    "term": "Cash reserve ratio (CRR)",
+    "meaning": "The required share of a bank's deposits that it must keep as cash reserves with the central bank, where applicable."
+  },
+  {
+    "term": "Cash flow statement",
+    "meaning": "A financial statement summarizing cash entering and leaving a business during a period."
+  },
+  {
+    "term": "Central bank digital currency (CBDC)",
+    "meaning": "A digital form of a country's official currency issued by its central bank."
+  },
+  {
+    "term": "Charge-off",
+    "meaning": "An accounting action that removes a loan or debt considered unlikely to be collected from certain asset records."
+  },
+  {
+    "term": "Clearing and settlement",
+    "meaning": "Clearing confirms payment obligations; settlement completes the transfer of money or assets."
+  },
+  {
+    "term": "Collateralised debt obligation (CDO)",
+    "meaning": "A financial product backed by a pool of debt assets and divided into different risk levels."
+  },
+  {
+    "term": "Commercial paper",
+    "meaning": "A short-term, usually unsecured debt instrument issued by eligible businesses to raise funds."
+  },
+  {
+    "term": "Compliance risk",
+    "meaning": "The risk of penalties or losses when an organization fails to follow laws, regulations, or required standards."
+  },
+  {
+    "term": "Core banking system (CBS)",
+    "meaning": "Software that connects a bank's main operations and customer accounts across branches and channels."
+  },
+  {
+    "term": "Corporate banking",
+    "meaning": "Banking services provided to companies and other business organizations."
+  },
+  {
+    "term": "Credit appraisal",
+    "meaning": "Assessing a borrower's ability and willingness to repay a loan."
+  },
+  {
+    "term": "Credit bureau",
+    "meaning": "An organization that collects credit information and prepares credit reports or scores."
+  },
+  {
+    "term": "Credit default swap (CDS)",
+    "meaning": "A contract in which one party pays for protection against a specified borrower's or issuer's credit default."
+  },
+  {
+    "term": "Credit exposure",
+    "meaning": "The amount a lender or financial institution could lose if a borrower or counterparty fails to meet obligations."
+  },
+  {
+    "term": "Credit limit",
+    "meaning": "The maximum amount a customer is allowed to borrow or spend under an approved facility."
+  },
+  {
+    "term": "Credit risk",
+    "meaning": "The possibility that a borrower or counterparty will not pay as agreed."
+  },
+  {
+    "term": "Cross-selling",
+    "meaning": "Offering existing customers additional products or services related to their needs."
+  },
+  {
+    "term": "Current account",
+    "meaning": "A bank account commonly used for frequent business transactions, with features depending on the bank and country."
+  },
+  {
+    "term": "Custodial services",
+    "meaning": "Services that hold and safeguard financial assets on behalf of clients."
+  },
+  {
+    "term": "Debit card",
+    "meaning": "A payment card that usually takes money directly from the linked bank account."
+  },
+  {
+    "term": "Debt servicing",
+    "meaning": "Making required payments of interest and principal on borrowed money."
+  },
+  {
+    "term": "Deferred tax",
+    "meaning": "A tax accounting amount arising from differences between accounting treatment and tax treatment across periods."
+  },
+  {
+    "term": "Demand deposit",
+    "meaning": "Money held in an account that can generally be withdrawn on demand, subject to account terms."
+  },
+  {
+    "term": "Derivatives",
+    "meaning": "Financial contracts whose value depends on an underlying asset, rate, index, or other reference."
+  },
+  {
+    "term": "Digital banking",
+    "meaning": "Using digital channels such as websites or apps to access banking services."
+  },
+  {
+    "term": "Direct debit",
+    "meaning": "A payment method that allows an authorized organization to collect money from a bank account under agreed instructions."
+  },
+  {
+    "term": "Discount rate",
+    "meaning": "A rate used to calculate the present value of future money or, in central banking, a rate charged under specific lending facilities."
+  },
+  {
+    "term": "Diversification",
+    "meaning": "Spreading investments or exposures across different assets or areas to reduce concentration risk."
+  },
+  {
+    "term": "Dormant account",
+    "meaning": "An account with no customer-initiated activity for a defined period, according to applicable rules."
+  },
+  {
+    "term": "Due diligence",
+    "meaning": "Careful checks carried out before making a financial, business, or lending decision."
+  },
+  {
+    "term": "Earnings per share (EPS)",
+    "meaning": "A company's profit allocated to each ordinary share, calculated under the relevant accounting rules."
+  },
+  {
+    "term": "Electronic funds transfer (EFT)",
+    "meaning": "Moving money electronically between accounts or parties."
+  },
+  {
+    "term": "End-of-day (EOD) processing",
+    "meaning": "The set of banking system tasks completed at the end of a business day."
+  },
+  {
+    "term": "Enterprise risk management (ERM)",
+    "meaning": "A coordinated approach to identifying and managing risks across an organization."
+  },
+  {
+    "term": "Equity capital",
+    "meaning": "Money invested in a business by its owners or shareholders."
+  },
+  {
+    "term": "Escrow account",
+    "meaning": "An account where a neutral party holds money until specified conditions are met."
+  },
+  {
+    "term": "Exposure at default (EAD)",
+    "meaning": "The estimated amount owed to a lender when a borrower defaults."
+  },
+  {
+    "term": "External commercial borrowing (ECB)",
+    "meaning": "A loan or borrowing raised by an eligible domestic entity from permitted foreign sources under applicable rules."
+  },
+  {
+    "term": "Factoring",
+    "meaning": "Selling or assigning invoices to a finance provider to receive money earlier, often for a fee."
+  },
+  {
+    "term": "Federal funds rate",
+    "meaning": "A U.S. interest rate associated with overnight lending of reserve balances between eligible financial institutions."
+  },
+  {
+    "term": "Financial inclusion",
+    "meaning": "Making useful and affordable financial services accessible to people and businesses."
+  },
+  {
+    "term": "Fixed deposit (FD)",
+    "meaning": "A deposit kept for a chosen period at an agreed interest rate, subject to product terms."
+  },
+  {
+    "term": "Floating interest rate",
+    "meaning": "An interest rate that can change according to a reference rate or agreed formula."
+  },
+  {
+    "term": "Foreign exchange (Forex)",
+    "meaning": "The market and activity of exchanging one currency for another."
+  },
+  {
+    "term": "Forward contract",
+    "meaning": "An agreement to buy or sell an asset at a set price on a future date."
+  },
+  {
+    "term": "Fraud detection",
+    "meaning": "Identifying suspicious activity that may involve deception or unauthorized transactions."
+  },
+  {
+    "term": "Fund transfer pricing (FTP)",
+    "meaning": "An internal method banks use to assign funding costs and benefits to business units."
+  },
+  {
+    "term": "Hedge fund",
+    "meaning": "An investment fund that may use a wide range of strategies and instruments, subject to its rules and applicable law."
+  },
+  {
+    "term": "High net worth individual (HNI)",
+    "meaning": "A person whose financial assets or wealth meet a threshold used by a financial service provider."
+  },
+  {
+    "term": "Home equity loan",
+    "meaning": "A loan secured against the borrower's ownership value in a home."
+  },
+  {
+    "term": "Hypothecation",
+    "meaning": "Creating a charge over an asset as security for a loan while the borrower usually keeps possession of it."
+  },
+  {
+    "term": "Income statement",
+    "meaning": "A financial statement showing revenue, expenses, and profit or loss over a period."
+  },
+  {
+    "term": "Interest rate swap (IRS)",
+    "meaning": "A contract in which parties exchange interest payment streams, commonly fixed for floating, based on an agreed amount."
+  },
+  {
+    "term": "Internal audit",
+    "meaning": "An independent review of an organization's controls, processes, and risk management."
+  },
+  {
+    "term": "Internal rate of return (IRR)",
+    "meaning": "The discount rate at which a project's or investment's net present value equals zero."
+  },
+  {
+    "term": "Investment banking",
+    "meaning": "Financial services that may include helping organizations raise capital, advise on mergers, or arrange securities transactions."
+  },
+  {
+    "term": "KYC (Know Your Customer)",
+    "meaning": "Checks used by financial institutions to verify customers' identities and understand relevant customer information."
+  },
+  {
+    "term": "Leverage ratio",
+    "meaning": "A measure comparing a borrower's or institution's debt or exposures with capital or another financial base, depending on the definition used."
+  },
+  {
+    "term": "Liability",
+    "meaning": "A financial obligation that a person or organization owes to another party."
+  },
+  {
+    "term": "Liquidity coverage ratio (LCR)",
+    "meaning": "A regulatory measure comparing high-quality liquid assets with expected net cash outflows over a specified short stress period."
+  },
+  {
+    "term": "Loan origination",
+    "meaning": "The process of receiving, assessing, approving, and setting up a new loan."
+  },
+  {
+    "term": "Loan syndication",
+    "meaning": "Arranging a loan in which multiple lenders provide portions of the total financing."
+  },
+  {
+    "term": "Loss given default (LGD)",
+    "meaning": "The estimated portion of an exposure that a lender will lose if the borrower defaults."
+  },
+  {
+    "term": "Margin call",
+    "meaning": "A request to add funds or eligible collateral when an account's margin falls below a required level."
+  },
+  {
+    "term": "Market risk",
+    "meaning": "The risk of losses caused by changes in market prices or rates."
+  },
+  {
+    "term": "Merchant banking",
+    "meaning": "Financial services for businesses that may include fundraising, corporate advice, and issue management, depending on the jurisdiction."
+  },
+  {
+    "term": "Mobile banking",
+    "meaning": "Accessing banking services through a mobile device or application."
+  },
+  {
+    "term": "Mortgage-backed securities (MBS)",
+    "meaning": "Securities whose cash flows are backed by a pool of mortgage loans."
+  },
+  {
+    "term": "Mutual fund",
+    "meaning": "An investment vehicle that pools money from investors to invest according to a stated objective."
+  },
+  {
+    "term": "Net asset value (NAV)",
+    "meaning": "The value of a fund's assets minus its liabilities, often calculated per unit or share."
+  },
+  {
+    "term": "Net interest margin (NIM)",
+    "meaning": "A measure of net interest income relative to interest-earning assets."
+  },
+  {
+    "term": "Non-performing asset (NPA)",
+    "meaning": "A loan or advance classified as non-performing under the applicable regulatory or accounting rules."
+  },
+  {
+    "term": "Nostro account",
+    "meaning": "An account a bank holds with another bank, usually in a foreign country and often in that country's currency."
+  },
+  {
+    "term": "Operational risk",
+    "meaning": "The risk of loss caused by failed processes, people, systems, or external events."
+  },
+  {
+    "term": "Overdraft",
+    "meaning": "A facility that allows an account to go below zero up to an approved limit, subject to terms."
+  },
+  {
+    "term": "Payment gateway",
+    "meaning": "A service that securely passes payment information between a merchant and payment processors or banks."
+  },
+  {
+    "term": "Payment settlement system",
+    "meaning": "An arrangement that transfers funds between participants to complete payments."
+  },
+  {
+    "term": "Personal banking",
+    "meaning": "Banking services designed for individual customers rather than businesses."
+  },
+  {
+    "term": "Portfolio management",
+    "meaning": "Selecting and monitoring investments to meet a client's goals and risk preferences."
+  },
+  {
+    "term": "Prepayment risk",
+    "meaning": "The risk that a loan or investment will be repaid earlier than expected, changing future cash flows."
+  },
+  {
+    "term": "Priority sector lending (PSL)",
+    "meaning": "Lending targets or requirements that direct eligible bank credit toward specified sectors under local rules."
+  },
+  {
+    "term": "Private banking",
+    "meaning": "Personalized financial and banking services for clients who meet a provider's eligibility criteria."
+  },
+  {
+    "term": "Provisioning",
+    "meaning": "Setting aside an amount in accounts to recognize expected or potential losses."
+  },
+  {
+    "term": "Public sector bank (PSB)",
+    "meaning": "A bank owned or controlled by the government under the relevant country's definition."
+  },
+  {
+    "term": "Quantitative easing (QE)",
+    "meaning": "A central bank policy of buying financial assets to influence financial conditions and liquidity."
+  },
+  {
+    "term": "Real-time gross settlement (RTGS)",
+    "meaning": "A payment system that settles transfers individually in real time, commonly used for large-value payments."
+  },
+  {
+    "term": "Recurring deposit (RD)",
+    "meaning": "A deposit product where a customer contributes a set amount regularly for a chosen period."
+  },
+  {
+    "term": "Repo rate",
+    "meaning": "The rate used in repurchase-agreement transactions; in many countries it is also an important central-bank policy rate."
+  },
+  {
+    "term": "Retail banking",
+    "meaning": "Banking services provided to individuals and small households."
+  },
+  {
+    "term": "Return on assets (ROA)",
+    "meaning": "A measure of profit relative to the assets used to generate it."
+  },
+  {
+    "term": "Return on equity (ROE)",
+    "meaning": "A measure of profit relative to shareholders' equity."
+  },
+  {
+    "term": "Risk-weighted assets (RWA)",
+    "meaning": "Assets and exposures adjusted by regulatory risk weights to help calculate capital requirements."
+  },
+  {
+    "term": "Savings account",
+    "meaning": "A bank account designed to hold money and may pay interest according to its terms."
+  },
+  {
+    "term": "Securitization",
+    "meaning": "Pooling financial assets and issuing securities backed by their cash flows."
+  },
+  {
+    "term": "Settlement risk",
+    "meaning": "The risk that one party to a transaction fails to deliver money or assets as expected during settlement."
+  },
+  {
+    "term": "Shadow banking",
+    "meaning": "Credit intermediation outside the traditional regulated banking system, with the exact scope depending on the jurisdiction."
+  },
+  {
+    "term": "Smart contracts in banking",
+    "meaning": "Code that automatically carries out agreed actions when specified conditions are met, often on a blockchain or similar platform."
+  },
+  {
+    "term": "Solvency ratio",
+    "meaning": "A measure used to assess whether an organization has enough capital or resources to meet its longer-term obligations; the exact formula depends on context."
+  },
+  {
+    "term": "Statutory liquidity ratio (SLR)",
+    "meaning": "In India, a regulatory requirement for banks to maintain a prescribed share of net demand and time liabilities in specified liquid assets."
+  },
+  {
+    "term": "Stress testing",
+    "meaning": "Assessing how a bank or portfolio might perform under severe but plausible adverse scenarios."
+  },
+  {
+    "term": "Structured finance",
+    "meaning": "Financial arrangements that use tailored structures to meet complex funding or risk-transfer needs."
+  },
+  {
+    "term": "Subprime lending",
+    "meaning": "Lending to borrowers considered to have higher credit risk under a lender's criteria."
+  },
+  {
+    "term": "SWIFT network",
+    "meaning": "A secure messaging network used by financial institutions to exchange standardized financial messages; it does not itself move money."
+  },
+  {
+    "term": "Term loan",
+    "meaning": "A loan provided for a defined period and repaid according to an agreed schedule."
+  },
+  {
+    "term": "Treasury operations",
+    "meaning": "Managing an institution's liquidity, funding, investments, and financial market exposures."
+  },
+  {
+    "term": "Underwriting",
+    "meaning": "Assessing risks and deciding whether and on what terms to provide a loan, insurance, or securities issuance support."
+  },
+  {
+    "term": "Universal banking",
+    "meaning": "A banking model that combines several types of financial services within one institution, subject to local regulation."
+  },
+  {
+    "term": "Value at risk (VaR)",
+    "meaning": "An estimate of potential loss over a specified time and confidence level under a model's assumptions."
+  },
+  {
+    "term": "Venture debt",
+    "meaning": "Debt financing provided to eligible high-growth companies, often alongside equity financing."
+  },
+  {
+    "term": "Wire transfer",
+    "meaning": "An electronic transfer of money between financial institutions or accounts."
+  },
+  {
+    "term": "Working capital financing",
+    "meaning": "Funding used to cover a business's short-term operating needs, such as inventory and receivables."
   }
 ]
