@@ -7,21 +7,44 @@ from dotenv import load_dotenv
 from groq import Groq
 
 # Load environment variables from the .env file
-load_dotenv()
+BASE_DIR = Path(__file__).parent
+load_dotenv(BASE_DIR / ".env")
 
 # Locate the banking terms dataset
-DATASET_PATH = Path(__file__).parent / "banking_terms.json"
+DATASET_PATH = BASE_DIR / "banking_terms.json"
 
 
 def load_banking_terms():
     """Load banking terms and meanings from JSON."""
+    if not DATASET_PATH.exists():
+        raise FileNotFoundError(
+            f"Dataset file not found: {DATASET_PATH}"
+        )
+
     with open(DATASET_PATH, "r", encoding="utf-8") as file:
-        return json.load(file)
+        banking_terms = json.load(file)
+
+    if not isinstance(banking_terms, list):
+        raise ValueError(
+            "The banking dataset must contain a JSON list."
+        )
+
+    if not all(
+        isinstance(item, dict)
+        and "term" in item
+        and "meaning" in item
+        for item in banking_terms
+    ):
+        raise ValueError(
+            "Each banking term must have 'term' and 'meaning' fields."
+        )
+
+    print(f"Loaded {len(banking_terms)} banking terms.")
+    return banking_terms
 
 
 def validate_story_inputs(selected_terms, word_count, genre):
     """Validate the user's story requirements."""
-
     banking_terms = load_banking_terms()
     available_terms = {item["term"] for item in banking_terms}
 
@@ -53,8 +76,8 @@ def validate_story_inputs(selected_terms, word_count, genre):
 
 def create_story_prompt(selected_terms, word_count, genre):
     """Prepare the prompt for the AI model."""
-
     banking_terms = load_banking_terms()
+
     meanings = {
         item["term"]: item["meaning"]
         for item in banking_terms
@@ -65,13 +88,13 @@ def create_story_prompt(selected_terms, word_count, genre):
         for term in selected_terms
     )
 
-    prompt = f"""
+    return f"""
 You are StoryBank, an educational storytelling assistant.
 
-Write a story for young learners.
+Write an interesting story for young learners.
 
 Genre: {genre}
-Target word count: approximately {word_count} words.
+Target length: approximately {word_count} words.
 
 Use these three banking concepts:
 {term_explanations}
@@ -83,14 +106,13 @@ Requirements:
 4. Make the story interesting and suitable for young learners.
 5. Aim for approximately {word_count} words.
 6. Include an interesting title.
-7. Return only the title and story.
+7. Return the complete title and story in the final answer.
+8. Do not return an empty response.
 """
-    return prompt
 
 
 def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
-
     validate_story_inputs(selected_terms, word_count, genre)
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -108,6 +130,7 @@ def generate_story(selected_terms, word_count, genre):
 
     client = Groq(api_key=api_key)
 
+    token_limit = 4096
     response = client.chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=[
@@ -115,7 +138,8 @@ def generate_story(selected_terms, word_count, genre):
                 "role": "system",
                 "content": (
                     "You are StoryBank, a friendly educational "
-                    "storytelling assistant for young learners."
+                    "storytelling assistant for young learners. "
+                    "Always provide the final story in message content."
                 )
             },
             {
@@ -124,13 +148,28 @@ def generate_story(selected_terms, word_count, genre):
             }
         ],
         temperature=0.7,
-        max_tokens=min(word_count * 2 + 200, 3000)
+        max_completion_tokens=token_limit,
+        reasoning_effort="low"
     )
 
-    story = response.choices[0].message.content
+    if not response.choices:
+        raise RuntimeError(
+            "Groq returned no choices. Please try again."
+        )
 
-    if not story:
-        raise RuntimeError("The AI returned an empty story.")
+    choice = response.choices[0]
+    story = choice.message.content
+
+    if not story or not story.strip():
+        print("Groq returned empty story content.")
+        print("Finish reason:", choice.finish_reason)
+        print("Token usage:", response.usage)
+
+        raise RuntimeError(
+            "The AI returned empty story content. "
+            f"Finish reason: {choice.finish_reason}. "
+            "Check the terminal for diagnostic details."
+        )
 
     return story.strip()
 
@@ -138,16 +177,19 @@ def generate_story(selected_terms, word_count, genre):
 if __name__ == "__main__":
     print("Welcome to StoryBank!")
 
-    selected_terms = [
-        "Savings account",
-        "Debit card",
-        "Fraud detection"
-    ]
-
-    word_count = 200
-    genre = "Adventure"
-
     try:
+        banking_terms = load_banking_terms()
+        print("Total available terms:", len(banking_terms))
+
+        selected_terms = [
+            "Savings account",
+            "Debit card",
+            "Fraud detection"
+        ]
+
+        word_count = 200
+        genre = "Adventure"
+
         print("\nGenerating your story... Please wait.")
 
         story = generate_story(
@@ -162,13 +204,7 @@ if __name__ == "__main__":
         print(story)
         print("\nStory generated successfully!")
 
-    except FileNotFoundError:
-        print("Error: banking_terms.json was not found.")
-        print("Check that it is in the same folder as backend.py.")
-
-    except json.JSONDecodeError:
-        print("Error: banking_terms.json contains invalid JSON.")
-
     except Exception as error:
-        print("\nStory generation failed.")
-        print("Error details:", error)
+        print("\nStoryBank encountered an error.")
+        print("Error type:", type(error).__name__)
+        print("Error details:", str(error))
