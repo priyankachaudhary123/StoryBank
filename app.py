@@ -160,10 +160,10 @@ if st.button(
 
         except Exception as error:
             # Print the complete error in the VS Code terminal
-            except Exception as error:
-    print("Story generation error:", repr(error))
-    st.error("Story generation failed.")
-    st.code(f"{type(error).__name__}: {error}")
+        except Exception as error:
+            print("Story generation error:", repr(error))
+            st.error("Story generation failed.")
+            st.code(f"{type(error).__name__}: {error}")
 # -----------------------------
 # Display generated story
 # -----------------------------
