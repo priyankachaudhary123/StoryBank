@@ -83,7 +83,7 @@ try:
 
 except Exception as error:
     st.error("Could not load the banking terms dataset.")
-    st.caption(f"Details: {error}")
+    st.code(f"{type(error).__name__}: {error}")
     st.stop()
 
 # -----------------------------
@@ -149,7 +149,7 @@ if st.button(
                     genre
                 )
 
-            if not story:
+            if not story or not story.strip():
                 st.error("The AI returned an empty story.")
 
             else:
@@ -158,12 +158,20 @@ if st.button(
                 st.session_state["storybank_genre"] = genre
                 st.session_state["storybank_word_count"] = word_count
 
-        except Exception as error:
-            # Print the complete error in the VS Code terminal
+                st.success("Story generated successfully!")
+
         except Exception as error:
             print("Story generation error:", repr(error))
+
             st.error("Story generation failed.")
+            st.write("Error details:")
             st.code(f"{type(error).__name__}: {error}")
+
+            st.info(
+                "Please check the error above. "
+                "Never share your API key."
+            )
+
 # -----------------------------
 # Display generated story
 # -----------------------------
@@ -181,9 +189,7 @@ if st.session_state.get("storybank_story"):
         f"{st.session_state['storybank_word_count']} words"
     )
 
-    st.markdown(
-        st.session_state["storybank_story"]
-    )
+    st.markdown(st.session_state["storybank_story"])
 
     st.download_button(
         label="⬇️ Download Your Story",
