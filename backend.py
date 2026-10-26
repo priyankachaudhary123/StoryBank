@@ -115,12 +115,21 @@ def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
     validate_story_inputs(selected_terms, word_count, genre)
 
-    api_key = os.getenv("GROQ_API_KEY")
+    
+api_key = os.getenv("GROQ_API_KEY")
 
-    if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY was not found. Check your .env file."
-        )
+if not api_key:
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("GROQ_API_KEY")
+    except Exception:
+        api_key = None
+
+if not api_key:
+    raise RuntimeError(
+        "GROQ_API_KEY is missing. Add it to your local .env "
+        "file or Streamlit Cloud Secrets."
+    )
 
     prompt = create_story_prompt(
         selected_terms,
