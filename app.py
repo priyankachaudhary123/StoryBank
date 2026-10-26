@@ -160,18 +160,10 @@ if st.button(
 
         except Exception as error:
             # Print the complete error in the VS Code terminal
-            print(
-                "Story generation error:",
-                repr(error)
-            )
-
-            # Show a helpful message in the website
-            st.error("Sorry, the story could not be generated.")
-            st.info(
-                "Please check the VS Code terminal for the exact error. "
-                "Do not share your API key."
-            )
-
+            except Exception as error:
+    print("Story generation error:", repr(error))
+    st.error("Story generation failed.")
+    st.code(f"{type(error).__name__}: {error}")
 # -----------------------------
 # Display generated story
 # -----------------------------
