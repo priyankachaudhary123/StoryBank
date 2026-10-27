@@ -1,9 +1,9 @@
-```python
+
 import json
 import os
 from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv iport load_dotenv
 from groq import Groq
 
 BASE_DIR = Path(__file__).parent
