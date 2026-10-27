@@ -169,6 +169,7 @@ if not api_key:
     choice = response.choices[0]
     story = choice.message.content
 
+    
     if not story or not story.strip():
         print("Groq returned empty story content.")
         print("Finish reason:", choice.finish_reason)
@@ -181,6 +182,7 @@ if not api_key:
         )
 
     return story.strip()
+
 
 
 if __name__ == "__main__":
