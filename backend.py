@@ -1,4 +1,4 @@
-
+```python
 import json
 import os
 from pathlib import Path
@@ -6,11 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 
-# Load environment variables from the .env file
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 
-# Locate the banking terms dataset
 DATASET_PATH = BASE_DIR / "banking_terms.json"
 
 
@@ -115,21 +113,20 @@ def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
     validate_story_inputs(selected_terms, word_count, genre)
 
-    
-api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
 
-if not api_key:
-    try:
-        import streamlit as st
-        api_key = st.secrets.get("GROQ_API_KEY")
-    except Exception:
-        api_key = None
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("GROQ_API_KEY")
+        except Exception:
+            api_key = None
 
-if not api_key:
-    raise RuntimeError(
-        "GROQ_API_KEY is missing. Add it to your local .env "
-        "file or Streamlit Cloud Secrets."
-    )
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY is missing. Add it to your local .env "
+            "file or Streamlit Cloud Secrets."
+        )
 
     prompt = create_story_prompt(
         selected_terms,
@@ -139,7 +136,6 @@ if not api_key:
 
     client = Groq(api_key=api_key)
 
-    token_limit = 4096
     response = client.chat.completions.create(
         model="openai/gpt-oss-20b",
         messages=[
@@ -157,7 +153,7 @@ if not api_key:
             }
         ],
         temperature=0.7,
-        max_completion_tokens=token_limit,
+        max_completion_tokens=4096,
         reasoning_effort="low"
     )
 
@@ -169,7 +165,6 @@ if not api_key:
     choice = response.choices[0]
     story = choice.message.content
 
-    
     if not story or not story.strip():
         print("Groq returned empty story content.")
         print("Finish reason:", choice.finish_reason)
@@ -178,11 +173,10 @@ if not api_key:
         raise RuntimeError(
             "The AI returned empty story content. "
             f"Finish reason: {choice.finish_reason}. "
-            "Check the terminal for diagnostic details."
+            "Check the logs for diagnostic details."
         )
 
     return story.strip()
-
 
 
 if __name__ == "__main__":
@@ -219,3 +213,4 @@ if __name__ == "__main__":
         print("\nStoryBank encountered an error.")
         print("Error type:", type(error).__name__)
         print("Error details:", str(error))
+```
