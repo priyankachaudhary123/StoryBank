@@ -213,4 +213,4 @@ if __name__ == "__main__":
         print("\nStoryBank encountered an error.")
         print("Error type:", type(error).__name__)
         print("Error details:", str(error))
-```
+
