@@ -1,3 +1,4 @@
+
 import json
 import os
 from pathlib import Path
@@ -5,14 +6,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 
+# Load environment variables
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 
+# Dataset location
 DATASET_PATH = BASE_DIR / "banking_terms.json"
 
 
 def load_banking_terms():
     """Load banking terms and meanings from JSON."""
+
     if not DATASET_PATH.exists():
         raise FileNotFoundError(
             f"Dataset file not found: {DATASET_PATH}"
@@ -37,11 +41,13 @@ def load_banking_terms():
         )
 
     print(f"Loaded {len(banking_terms)} banking terms.")
+
     return banking_terms
 
 
 def validate_story_inputs(selected_terms, word_count, genre):
     """Validate the user's story requirements."""
+
     banking_terms = load_banking_terms()
     available_terms = {item["term"] for item in banking_terms}
 
@@ -73,6 +79,7 @@ def validate_story_inputs(selected_terms, word_count, genre):
 
 def create_story_prompt(selected_terms, word_count, genre):
     """Prepare the prompt for the AI model."""
+
     banking_terms = load_banking_terms()
 
     meanings = {
@@ -103,15 +110,17 @@ Requirements:
 4. Make the story interesting and suitable for young learners.
 5. Aim for approximately {word_count} words.
 6. Include an interesting title.
-7. Return the complete title and story in the final answer.
+7. Return the complete title and story.
 8. Do not return an empty response.
 """
 
 
 def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
+
     validate_story_inputs(selected_terms, word_count, genre)
 
+    # Get API key
     api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
@@ -127,12 +136,14 @@ def generate_story(selected_terms, word_count, genre):
             "file or Streamlit Cloud Secrets."
         )
 
+    # Prepare prompt
     prompt = create_story_prompt(
         selected_terms,
         word_count,
         genre
     )
 
+    # Connect to Groq
     client = Groq(api_key=api_key)
 
     response = client.chat.completions.create(
@@ -172,13 +183,14 @@ def generate_story(selected_terms, word_count, genre):
         raise RuntimeError(
             "The AI returned empty story content. "
             f"Finish reason: {choice.finish_reason}. "
-            "Check the logs for diagnostic details."
+            "Check the terminal for diagnostic details."
         )
 
     return story.strip()
 
 
 if __name__ == "__main__":
+
     print("Welcome to StoryBank!")
 
     try:
@@ -206,10 +218,10 @@ if __name__ == "__main__":
         print("YOUR STORYBANK STORY")
         print("=" * 40)
         print(story)
+
         print("\nStory generated successfully!")
 
     except Exception as error:
         print("\nStoryBank encountered an error.")
         print("Error type:", type(error).__name__)
         print("Error details:", str(error))
-
