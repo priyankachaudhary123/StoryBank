@@ -5,6 +5,7 @@ import hmac
 import os
 import secrets
 import smtplib
+import streamlit as st
 
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -64,6 +65,41 @@ def verify_password(password, stored_hash):
 
     except (ValueError, TypeError, AttributeError):
         return False
+
+
+# -----------------------------
+# Read admin credentials
+# -----------------------------
+def get_admin_credentials():
+
+    admin_email = ""
+    admin_password = ""
+
+    # First try Streamlit Cloud Secrets
+    try:
+        admin_email = str(
+            st.secrets.get("ADMIN_EMAIL", "")
+        ).strip().lower()
+
+        admin_password = str(
+            st.secrets.get("ADMIN_PASSWORD", "")
+        )
+
+    except Exception:
+        pass
+
+    # Fall back to local environment variables
+    if not admin_email:
+        admin_email = (
+            os.getenv("ADMIN_EMAIL") or ""
+        ).strip().lower()
+
+    if not admin_password:
+        admin_password = (
+            os.getenv("ADMIN_PASSWORD") or ""
+        )
+
+    return admin_email, admin_password
 
 
 # -----------------------------
@@ -151,36 +187,52 @@ def initialize_database():
                 "ALTER TABLE password_reset_otps ADD COLUMN verified_at TEXT"
             )
 
-        # Create admin account
-        admin_email = os.getenv("ADMIN_EMAIL")
-        admin_password = os.getenv("ADMIN_PASSWORD")
+        # -----------------------------
+        # Create or update admin account
+        # -----------------------------
+        admin_email, admin_password = get_admin_credentials()
 
         if admin_email and admin_password:
-
-            admin_email = admin_email.strip().lower()
 
             cursor.execute(
                 "SELECT id FROM users WHERE email = ?",
                 (admin_email,)
             )
 
-            if cursor.fetchone() is None:
+            existing_admin = cursor.fetchone()
+
+            if existing_admin is None:
 
                 cursor.execute("""
                     INSERT INTO users
-                    (name, email, password_hash, role, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    (name, email, password_hash, role,
+                     is_active, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
                     "Administrator",
                     admin_email,
                     hash_password(admin_password),
                     "admin",
+                    1,
                     datetime.now().isoformat(timespec="seconds")
+                ))
+
+            else:
+
+                cursor.execute("""
+                    UPDATE users
+                    SET role = 'admin',
+                        password_hash = ?,
+                        is_active = 1
+                    WHERE email = ?
+                """, (
+                    hash_password(admin_password),
+                    admin_email
                 ))
 
 
 # -----------------------------
-# Google sign-in
+# Google sign-in helper
 # -----------------------------
 def get_or_create_google_user(email, name, google_sub):
 
@@ -195,7 +247,6 @@ def get_or_create_google_user(email, name, google_sub):
 
         with get_connection() as conn:
 
-            # Check whether this Google account already exists
             user = conn.execute("""
                 SELECT id, name, email, role, is_active, google_sub
                 FROM users
@@ -214,7 +265,6 @@ def get_or_create_google_user(email, name, google_sub):
                     "role": user[3]
                 }, None
 
-            # Check whether an email/password account already exists
             user = conn.execute("""
                 SELECT id, name, email, role, is_active, google_sub
                 FROM users
@@ -229,7 +279,6 @@ def get_or_create_google_user(email, name, google_sub):
                 if user[5] and user[5] != google_sub:
                     return None, "This email is linked to another Google account."
 
-                # Link the verified Google identity to the existing account
                 conn.execute("""
                     UPDATE users
                     SET google_sub = ?
@@ -243,7 +292,6 @@ def get_or_create_google_user(email, name, google_sub):
                     "role": user[3]
                 }, None
 
-            # Create a new Google user
             random_password = secrets.token_urlsafe(32)
 
             cursor = conn.execute("""
@@ -346,13 +394,29 @@ def authenticate_user(email, password):
 def send_otp_email(email, otp):
 
     smtp_email = (os.getenv("SMTP_EMAIL") or "").strip()
+
     smtp_password = "".join(
         (os.getenv("SMTP_APP_PASSWORD") or "").split()
     )
 
+    # Also support Streamlit Cloud Secrets
+    try:
+        if not smtp_email:
+            smtp_email = str(
+                st.secrets.get("SMTP_EMAIL", "")
+            ).strip()
+
+        if not smtp_password:
+            smtp_password = "".join(
+                str(st.secrets.get("SMTP_APP_PASSWORD", "")).split()
+            )
+
+    except Exception:
+        pass
+
     if not smtp_email or not smtp_password:
         raise ValueError(
-            "SMTP_EMAIL or SMTP_APP_PASSWORD is missing in .env."
+            "SMTP_EMAIL or SMTP_APP_PASSWORD is missing."
         )
 
     message = EmailMessage()
@@ -464,7 +528,6 @@ def send_password_reset_otp(email):
     except ValueError as error:
 
         print("OTP email error:", repr(error))
-
         return False, str(error)
 
     except smtplib.SMTPAuthenticationError as error:
@@ -472,9 +535,7 @@ def send_password_reset_otp(email):
         print("OTP email authentication error:", repr(error))
 
         return False, (
-            "Gmail rejected the SMTP login. Check that SMTP_EMAIL is the "
-            "Google account address and SMTP_APP_PASSWORD is a valid Gmail "
-            "App Password (2-Step Verification must be enabled)."
+            "Gmail rejected the SMTP login. Check your Gmail App Password."
         )
 
     except (smtplib.SMTPException, OSError) as error:
@@ -482,8 +543,8 @@ def send_password_reset_otp(email):
         print("OTP email connection error:", repr(error))
 
         return False, (
-            "Could not connect to Gmail SMTP. Check your internet connection "
-            f"and Gmail SMTP settings ({type(error).__name__})."
+            "Could not connect to Gmail SMTP. "
+            f"Check your settings ({type(error).__name__})."
         )
 
 
@@ -519,7 +580,6 @@ def verify_password_reset_otp(email, otp):
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
-
             return False, "Too many attempts. Please request a new OTP."
 
         if datetime.now() > datetime.fromisoformat(expires_at):
@@ -528,7 +588,6 @@ def verify_password_reset_otp(email, otp):
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
-
             return False, "OTP has expired. Please request a new OTP."
 
         entered_hash = hashlib.sha256(
@@ -592,7 +651,6 @@ def reset_password_with_verified_otp(email, new_password):
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
-
             return False, "OTP has expired. Please request a new OTP."
 
         cursor = conn.execute("""
