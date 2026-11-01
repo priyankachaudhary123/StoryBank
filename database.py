@@ -219,6 +219,8 @@ def initialize_database():
 
             else:
 
+                # IMPORTANT:
+                # Also update the password hash.
                 cursor.execute("""
                     UPDATE users
                     SET role = 'admin',
@@ -229,6 +231,33 @@ def initialize_database():
                     hash_password(admin_password),
                     admin_email
                 ))
+
+
+# -----------------------------
+# Temporary admin diagnostic
+# -----------------------------
+def check_admin_status():
+
+    admin_email, admin_password = get_admin_credentials()
+
+    with get_connection() as conn:
+
+        user = None
+
+        if admin_email:
+            user = conn.execute("""
+                SELECT role, is_active
+                FROM users
+                WHERE email = ?
+            """, (admin_email,)).fetchone()
+
+    return {
+        "admin_email_configured": bool(admin_email),
+        "admin_password_configured": bool(admin_password),
+        "admin_record_found": user is not None,
+        "admin_role": user[0] if user else None,
+        "admin_active": bool(user[1]) if user else None
+    }
 
 
 # -----------------------------
