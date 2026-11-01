@@ -5,7 +5,6 @@ from backend import load_banking_terms, generate_story
 
 from database import (
     initialize_database,
-    check_admin_status,
     register_user,
     authenticate_user,
     record_login,
@@ -38,13 +37,6 @@ initialize_database()
 
 
 # -----------------------------
-# Temporary admin diagnostic
-# -----------------------------
-st.sidebar.subheader("Admin Diagnostic")
-st.sidebar.json(check_admin_status())
-
-
-# -----------------------------
 # Session state
 # -----------------------------
 defaults = {
@@ -64,12 +56,20 @@ for key, value in defaults.items():
 # -----------------------------
 @st.cache_data
 def get_terms():
+
     data = load_banking_terms()
 
     if isinstance(data, dict):
         terms = list(data.keys())
+
     elif isinstance(data, list):
-        terms = data
+        terms = [
+            item["term"]
+            if isinstance(item, dict) and "term" in item
+            else item
+            for item in data
+        ]
+
     else:
         terms = []
 
@@ -77,7 +77,7 @@ def get_terms():
         set(
             str(term).strip()
             for term in terms
-            if str(term).strip()
+            if isinstance(term, str) and term.strip()
         )
     )
 
@@ -86,10 +86,12 @@ def get_terms():
 # Logout
 # -----------------------------
 def logout():
+
     st.session_state.user = None
     st.session_state.reset_email = ""
     st.session_state.otp_verified = False
     st.session_state.generated_story = ""
+
     st.rerun()
 
 
@@ -151,12 +153,15 @@ def authentication_page():
         if register_button:
 
             if not name.strip() or not email.strip() or not password:
+
                 st.error("Please fill in all fields.")
 
             elif password != confirm_password:
+
                 st.error("Passwords do not match.")
 
             else:
+
                 success, message = register_user(
                     name.strip(),
                     email.strip(),
@@ -165,6 +170,7 @@ def authentication_page():
 
                 if success:
                     st.success(message)
+
                 else:
                     st.error(message)
 
@@ -194,21 +200,28 @@ def authentication_page():
         if login_button:
 
             if not login_email or not login_password:
+
                 st.error("Please enter your email and password.")
 
             else:
+
                 user = authenticate_user(
                     login_email,
                     login_password
                 )
 
                 if user:
+
                     st.session_state.user = user
+
                     record_login(user["id"])
+
                     st.success("Login successful!")
+
                     st.rerun()
 
                 else:
+
                     st.error(
                         "Invalid email or password, "
                         "or your account is inactive."
@@ -230,21 +243,27 @@ def authentication_page():
         ):
 
             if not reset_email.strip():
+
                 st.error("Please enter your email address.")
 
             else:
+
                 success, message = send_password_reset_otp(
                     reset_email.strip()
                 )
 
                 if success:
+
                     st.session_state.reset_email = (
                         reset_email.strip().lower()
                     )
+
                     st.session_state.otp_verified = False
+
                     st.success(message)
 
                 else:
+
                     st.error(message)
 
         if st.session_state.reset_email:
@@ -269,10 +288,13 @@ def authentication_page():
                 )
 
                 if success:
+
                     st.session_state.otp_verified = True
+
                     st.success(message)
 
                 else:
+
                     st.error(message)
 
             if st.session_state.otp_verified:
@@ -296,23 +318,29 @@ def authentication_page():
                 if st.button("Reset Password"):
 
                     if not new_password:
+
                         st.error("Please enter a new password.")
 
                     elif new_password != confirm_new_password:
+
                         st.error("Passwords do not match.")
 
                     else:
+
                         success, message = reset_password_with_verified_otp(
                             st.session_state.reset_email,
                             new_password
                         )
 
                         if success:
+
                             st.success(message)
+
                             st.session_state.reset_email = ""
                             st.session_state.otp_verified = False
 
                         else:
+
                             st.error(message)
 
 
@@ -322,6 +350,7 @@ def authentication_page():
 def user_dashboard(user):
 
     st.title("📚 StoryBank")
+
     st.write(f"Welcome, **{user['name']}**!")
 
     if st.button("Logout"):
@@ -337,19 +366,31 @@ def user_dashboard(user):
         st.subheader("Generate Your Banking Story")
 
         try:
+
             banking_terms = get_terms()
 
         except Exception as error:
-            st.error(f"Could not load banking terms: {error}")
+
+            st.error(
+                f"Could not load banking terms: {error}"
+            )
+
             banking_terms = []
 
         if not banking_terms:
-            st.warning("No banking terms were found in the dataset.")
+
+            st.warning(
+                "No banking terms were found in the dataset."
+            )
 
         elif len(banking_terms) < 3:
-            st.warning("At least three banking terms are required.")
+
+            st.warning(
+                "At least three banking terms are required."
+            )
 
         else:
+
             selected_terms = st.multiselect(
                 "Select exactly 3 banking terms",
                 options=banking_terms,
@@ -375,22 +416,36 @@ def user_dashboard(user):
             ):
 
                 if len(selected_terms) != 3:
-                    st.error("Please select exactly 3 banking terms.")
+
+                    st.error(
+                        "Please select exactly 3 banking terms."
+                    )
 
                 else:
-                    with st.spinner("Generating your story..."):
+
+                    with st.spinner(
+                        "Generating your story..."
+                    ):
 
                         try:
+
+                            # Correct argument order:
+                            # selected_terms, word_count, genre
+
                             story = generate_story(
                                 selected_terms,
-                                genre,
-                                int(word_count)
+                                int(word_count),
+                                genre
                             )
 
                             if not story:
-                                st.error("The AI returned an empty story.")
+
+                                st.error(
+                                    "The AI returned an empty story."
+                                )
 
                             else:
+
                                 st.session_state.generated_story = story
 
                                 save_story(
@@ -401,19 +456,26 @@ def user_dashboard(user):
                                     story
                                 )
 
-                                st.success("Your story was generated!")
+                                st.success(
+                                    "Your story was generated!"
+                                )
 
                         except Exception as error:
+
                             st.error(
                                 f"Story generation failed: {error}"
                             )
 
+            # Display generated story
             if st.session_state.generated_story:
 
                 st.divider()
+
                 st.subheader("Your Generated Story")
 
-                st.write(st.session_state.generated_story)
+                st.write(
+                    st.session_state.generated_story
+                )
 
                 st.download_button(
                     "Download Story",
@@ -430,22 +492,42 @@ def user_dashboard(user):
         stories = get_user_stories(user["id"])
 
         if not stories:
-            st.info("You have not generated any stories yet.")
+
+            st.info(
+                "You have not generated any stories yet."
+            )
 
         else:
+
             for story in stories:
 
-                story_id, terms, genre, count, content, created_at = story
+                (
+                    story_id,
+                    terms,
+                    genre,
+                    count,
+                    content,
+                    created_at
+                ) = story
 
                 with st.expander(
                     f"Story {story_id} - {genre} - {created_at}"
                 ):
 
-                    st.write(f"**Banking terms:** {terms}")
-                    st.write(f"**Genre:** {genre}")
-                    st.write(f"**Word count:** {count}")
+                    st.write(
+                        f"**Banking terms:** {terms}"
+                    )
+
+                    st.write(
+                        f"**Genre:** {genre}"
+                    )
+
+                    st.write(
+                        f"**Word count:** {count}"
+                    )
 
                     st.divider()
+
                     st.write(content)
 
                     st.download_button(
@@ -483,25 +565,39 @@ def admin_dashboard(user):
         users = get_all_users()
 
         if not users:
+
             st.info("No users found.")
 
         else:
+
             for account in users:
 
-                user_id, name, email, role, is_active, created_at = account
+                (
+                    user_id,
+                    name,
+                    email,
+                    role,
+                    is_active,
+                    created_at
+                ) = account
 
                 with st.container(border=True):
 
                     col1, col2 = st.columns([3, 1])
 
                     with col1:
+
                         st.write(f"**{name}**")
+
                         st.write(email)
+
                         st.write(f"Role: {role}")
+
                         st.write(f"Created: {created_at}")
 
                         if is_active:
                             st.success("Active")
+
                         else:
                             st.error("Inactive")
 
@@ -510,19 +606,31 @@ def admin_dashboard(user):
                         if role == "user":
 
                             if is_active:
+
                                 if st.button(
                                     "Deactivate",
                                     key=f"deactivate_{user_id}"
                                 ):
-                                    set_user_active(user_id, False)
+
+                                    set_user_active(
+                                        user_id,
+                                        False
+                                    )
+
                                     st.rerun()
 
                             else:
+
                                 if st.button(
                                     "Activate",
                                     key=f"activate_{user_id}"
                                 ):
-                                    set_user_active(user_id, True)
+
+                                    set_user_active(
+                                        user_id,
+                                        True
+                                    )
+
                                     st.rerun()
 
     # All stories
@@ -533,9 +641,13 @@ def admin_dashboard(user):
         stories = get_all_stories()
 
         if not stories:
-            st.info("No stories have been generated yet.")
+
+            st.info(
+                "No stories have been generated yet."
+            )
 
         else:
+
             for story in stories:
 
                 (
@@ -554,13 +666,21 @@ def admin_dashboard(user):
                 ):
 
                     st.write(f"**User:** {name}")
+
                     st.write(f"**Email:** {email}")
+
                     st.write(f"**Terms:** {terms}")
+
                     st.write(f"**Genre:** {genre}")
-                    st.write(f"**Word count:** {word_count}")
+
+                    st.write(
+                        f"**Word count:** {word_count}"
+                    )
+
                     st.write(f"**Date:** {created_at}")
 
                     st.divider()
+
                     st.write(content)
 
     # Login history
@@ -571,9 +691,13 @@ def admin_dashboard(user):
         history = get_login_history()
 
         if not history:
-            st.info("No login history available.")
+
+            st.info(
+                "No login history available."
+            )
 
         else:
+
             for name, email, login_time in history:
 
                 st.write(
@@ -595,9 +719,11 @@ else:
     current_user = st.session_state.user
 
     if current_user["role"] == "admin":
+
         admin_dashboard(current_user)
 
     else:
+
         user_dashboard(current_user)
 
 
