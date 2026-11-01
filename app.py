@@ -5,6 +5,7 @@ from backend import load_banking_terms, generate_story
 
 from database import (
     initialize_database,
+    check_admin_status,
     register_user,
     authenticate_user,
     record_login,
@@ -34,6 +35,13 @@ st.set_page_config(
 # Initialize database
 # -----------------------------
 initialize_database()
+
+
+# -----------------------------
+# Temporary admin diagnostic
+# -----------------------------
+st.sidebar.subheader("Admin Diagnostic")
+st.sidebar.json(check_admin_status())
 
 
 # -----------------------------
@@ -115,9 +123,7 @@ def authentication_page():
 
     st.divider()
 
-    # -------------------------
     # Create account
-    # -------------------------
     with st.expander("📝 Create Your Account"):
 
         st.subheader("Create a new account")
@@ -125,7 +131,6 @@ def authentication_page():
         with st.form("register_form"):
 
             name = st.text_input("Full name")
-
             email = st.text_input("Email address")
 
             password = st.text_input(
@@ -163,9 +168,7 @@ def authentication_page():
                 else:
                     st.error(message)
 
-    # -------------------------
     # Login
-    # -------------------------
     with st.expander("🔐 Login to StoryBank"):
 
         st.subheader("Login to your account")
@@ -201,9 +204,7 @@ def authentication_page():
 
                 if user:
                     st.session_state.user = user
-
                     record_login(user["id"])
-
                     st.success("Login successful!")
                     st.rerun()
 
@@ -213,9 +214,7 @@ def authentication_page():
                         "or your account is inactive."
                     )
 
-    # -------------------------
     # Forgot password
-    # -------------------------
     with st.expander("🔑 Forgot Password?"):
 
         st.subheader("Reset your password")
@@ -242,9 +241,7 @@ def authentication_page():
                     st.session_state.reset_email = (
                         reset_email.strip().lower()
                     )
-
                     st.session_state.otp_verified = False
-
                     st.success(message)
 
                 else:
@@ -312,7 +309,6 @@ def authentication_page():
 
                         if success:
                             st.success(message)
-
                             st.session_state.reset_email = ""
                             st.session_state.otp_verified = False
 
@@ -326,7 +322,6 @@ def authentication_page():
 def user_dashboard(user):
 
     st.title("📚 StoryBank")
-
     st.write(f"Welcome, **{user['name']}**!")
 
     if st.button("Logout"):
