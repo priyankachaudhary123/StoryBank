@@ -1,4 +1,3 @@
-
 import sqlite3
 import hashlib
 import hmac
@@ -6,7 +5,6 @@ import os
 import secrets
 import smtplib
 import json
-
 import streamlit as st
 
 from pathlib import Path
@@ -38,6 +36,32 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+# -------------------------------------------------
+# Safe database migration helper
+# -------------------------------------------------
+
+def add_column_if_missing(conn, table, column, definition):
+    """
+    Add a database column only if it does not already exist.
+    Handles duplicate-column errors safely.
+    """
+    columns = {
+        row["name"]
+        for row in conn.execute(
+            f"PRAGMA table_info({table})"
+        ).fetchall()
+    }
+
+    if column not in columns:
+        try:
+            conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
+        except sqlite3.OperationalError as error:
+            if "duplicate column name" not in str(error).lower():
+                raise
 
 
 # -------------------------------------------------
@@ -86,7 +110,7 @@ def get_secret(name, default=""):
     except Exception:
         pass
 
-    return os.getenv(name, default).strip()
+    return str(os.getenv(name, default)).strip()
 
 
 def get_admin_credentials():
@@ -144,39 +168,34 @@ def initialize_database():
                 otp_hash TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                attempts INTEGER DEFAULT 0
+                attempts INTEGER DEFAULT 0,
+                verified_at TEXT
             )
         """)
 
-        # Migrate older database versions safely.
-        user_columns = {
-            row["name"]
-            for row in conn.execute(
-                "PRAGMA table_info(users)"
-            ).fetchall()
-        }
+        # Safely migrate older database versions.
+        add_column_if_missing(
+            conn, "users", "google_sub", "TEXT"
+        )
 
-        if "google_sub" not in user_columns:
-            conn.execute(
-                "ALTER TABLE users ADD COLUMN google_sub TEXT"
-            )
+        add_column_if_missing(
+            conn, "users", "verified_at", "TEXT"
+        )
 
-        if "verified_at" not in user_columns:
-            conn.execute(
-                "ALTER TABLE users ADD COLUMN verified_at TEXT"
-            )
+        add_column_if_missing(
+            conn, "password_reset_otps", "verified_at", "TEXT"
+        )
 
         # Create or update the administrator account.
         admin_email, admin_password = get_admin_credentials()
 
         if admin_email and admin_password:
 
-            existing_admin = conn.execute(
-                "SELECT id FROM users WHERE LOWER(TRIM(email)) = ?",
-                (admin_email,)
-            ).fetchone()
-
-            password_hash = hash_password(admin_password)
+            existing_admin = conn.execute("""
+                SELECT id
+                FROM users
+                WHERE LOWER(TRIM(email)) = ?
+            """, (admin_email,)).fetchone()
 
             if existing_admin:
                 conn.execute("""
@@ -185,7 +204,10 @@ def initialize_database():
                         password_hash = ?,
                         is_active = 1
                     WHERE id = ?
-                """, (password_hash, existing_admin["id"]))
+                """, (
+                    hash_password(admin_password),
+                    existing_admin["id"]
+                ))
 
             else:
                 conn.execute("""
@@ -195,7 +217,7 @@ def initialize_database():
                 """, (
                     "Administrator",
                     admin_email,
-                    password_hash,
+                    hash_password(admin_password),
                     datetime.now().isoformat(timespec="seconds")
                 ))
 
@@ -286,10 +308,7 @@ def authenticate_user(email, password):
             WHERE LOWER(TRIM(email)) = ?
         """, (email,)).fetchone()
 
-    if not user:
-        return None
-
-    if not user["is_active"]:
+    if not user or not user["is_active"]:
         return None
 
     if not verify_password(password, user["password_hash"]):
@@ -516,8 +535,7 @@ def send_otp_email(email, otp):
     message["From"] = smtp_email
     message["To"] = email
 
-    message.set_content(
-        f"""
+    message.set_content(f"""
 Hello,
 
 Your StoryBank password reset OTP is:
@@ -529,8 +547,7 @@ This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
 If you did not request this password reset, ignore this email.
 
 StoryBank Team
-"""
-    )
+""")
 
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:
         server.starttls()
@@ -594,13 +611,14 @@ def send_password_reset_otp(email):
     ).isoformat(timespec="seconds")
 
     try:
+        # Send email before saving the OTP.
         send_otp_email(email, otp)
 
         with get_connection() as conn:
             conn.execute("""
                 INSERT OR REPLACE INTO password_reset_otps
-                (email, otp_hash, expires_at, created_at, attempts)
-                VALUES (?, ?, ?, ?, 0)
+                (email, otp_hash, expires_at, created_at, attempts, verified_at)
+                VALUES (?, ?, ?, ?, 0, NULL)
             """, (
                 email,
                 otp_hash,
@@ -616,9 +634,7 @@ def send_password_reset_otp(email):
 
     except smtplib.SMTPAuthenticationError as error:
         print("OTP email authentication error:", repr(error))
-        return False, (
-            "Gmail rejected the SMTP login. Check your Gmail App Password."
-        )
+        return False, "Gmail rejected the SMTP login. Check your Gmail App Password."
 
     except (smtplib.SMTPException, OSError) as error:
         print("OTP email connection error:", repr(error))
@@ -679,6 +695,16 @@ def verify_password_reset_otp(email, otp):
 
             return False, "Incorrect OTP. Please try again."
 
+        # Save successful verification in the database.
+        conn.execute("""
+            UPDATE password_reset_otps
+            SET verified_at = ?
+            WHERE email = ?
+        """, (
+            datetime.now().isoformat(timespec="seconds"),
+            email
+        ))
+
     return True, "OTP verified successfully."
 
 
@@ -699,13 +725,16 @@ def reset_password_with_verified_otp(email, new_password):
     with get_connection() as conn:
 
         record = conn.execute("""
-            SELECT expires_at, attempts
+            SELECT expires_at, attempts, verified_at
             FROM password_reset_otps
             WHERE email = ?
         """, (email,)).fetchone()
 
         if not record:
-            return False, "Please verify your OTP again."
+            return False, "Please request and verify your OTP again."
+
+        if not record["verified_at"]:
+            return False, "Please verify your OTP before resetting your password."
 
         if record["attempts"] >= MAX_OTP_ATTEMPTS:
             return False, "Too many attempts. Please request a new OTP."
@@ -717,9 +746,7 @@ def reset_password_with_verified_otp(email, new_password):
             )
             return False, "OTP has expired. Please request a new OTP."
 
-        # IMPORTANT:
-        # The app calls this function only after OTP verification.
-        conn.execute("""
+        result = conn.execute("""
             UPDATE users
             SET password_hash = ?
             WHERE LOWER(TRIM(email)) = ?
@@ -729,9 +756,10 @@ def reset_password_with_verified_otp(email, new_password):
             email
         ))
 
-        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+        if result.rowcount == 0:
             return False, "Unable to update the password. Account not found."
 
+        # OTP is deleted after successful password reset.
         conn.execute(
             "DELETE FROM password_reset_otps WHERE email = ?",
             (email,)
