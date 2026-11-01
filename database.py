@@ -1,3 +1,4 @@
+
 import sqlite3
 import hashlib
 import hmac
@@ -43,10 +44,6 @@ def get_connection():
 # -------------------------------------------------
 
 def add_column_if_missing(conn, table, column, definition):
-    """
-    Add a database column only if it does not already exist.
-    Handles duplicate-column errors safely.
-    """
     columns = {
         row["name"]
         for row in conn.execute(
@@ -99,7 +96,7 @@ def verify_password(password, stored_hash):
 
 
 # -------------------------------------------------
-# Admin credentials
+# Admin credentials and Streamlit Secrets
 # -------------------------------------------------
 
 def get_secret(name, default=""):
@@ -173,7 +170,6 @@ def initialize_database():
             )
         """)
 
-        # Safely migrate older database versions.
         add_column_if_missing(
             conn, "users", "google_sub", "TEXT"
         )
@@ -186,7 +182,7 @@ def initialize_database():
             conn, "password_reset_otps", "verified_at", "TEXT"
         )
 
-        # Create or update the administrator account.
+        # Create or update administrator account.
         admin_email, admin_password = get_admin_credentials()
 
         if admin_email and admin_password:
@@ -516,7 +512,7 @@ def set_user_active(user_id, is_active):
 
 
 # -------------------------------------------------
-# Send OTP email
+# Send OTP email using Gmail SSL (Port 465)
 # -------------------------------------------------
 
 def send_otp_email(email, otp):
@@ -549,8 +545,12 @@ If you did not request this password reset, ignore this email.
 StoryBank Team
 """)
 
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:
-        server.starttls()
+    with smtplib.SMTP_SSL(
+        "smtp.gmail.com",
+        465,
+        timeout=30
+    ) as server:
+
         server.login(smtp_email, smtp_password)
         server.send_message(message)
 
@@ -636,11 +636,18 @@ def send_password_reset_otp(email):
         print("OTP email authentication error:", repr(error))
         return False, "Gmail rejected the SMTP login. Check your Gmail App Password."
 
-    except (smtplib.SMTPException, OSError) as error:
+    except smtplib.SMTPException as error:
+        print("OTP email SMTP error:", repr(error))
+        return False, (
+            "Gmail SMTP error. "
+            f"Check your Gmail settings ({type(error).__name__})."
+        )
+
+    except OSError as error:
         print("OTP email connection error:", repr(error))
         return False, (
             "Could not connect to Gmail SMTP. "
-            f"Check your settings ({type(error).__name__})."
+            f"Check your connection ({type(error).__name__})."
         )
 
 
@@ -695,7 +702,6 @@ def verify_password_reset_otp(email, otp):
 
             return False, "Incorrect OTP. Please try again."
 
-        # Save successful verification in the database.
         conn.execute("""
             UPDATE password_reset_otps
             SET verified_at = ?
@@ -759,7 +765,6 @@ def reset_password_with_verified_otp(email, new_password):
         if result.rowcount == 0:
             return False, "Unable to update the password. Account not found."
 
-        # OTP is deleted after successful password reset.
         conn.execute(
             "DELETE FROM password_reset_otps WHERE email = ?",
             (email,)
