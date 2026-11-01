@@ -4,13 +4,12 @@ import hashlib
 import hmac
 import os
 import secrets
-import smtplib
 import json
+import requests
 import streamlit as st
 
 from pathlib import Path
 from datetime import datetime, timedelta
-from email.message import EmailMessage
 from dotenv import load_dotenv
 
 
@@ -44,6 +43,7 @@ def get_connection():
 # -------------------------------------------------
 
 def add_column_if_missing(conn, table, column, definition):
+
     columns = {
         row["name"]
         for row in conn.execute(
@@ -66,6 +66,7 @@ def add_column_if_missing(conn, table, column, definition):
 # -------------------------------------------------
 
 def hash_password(password):
+
     salt = secrets.token_hex(16)
 
     password_hash = hashlib.pbkdf2_hmac(
@@ -79,6 +80,7 @@ def hash_password(password):
 
 
 def verify_password(password, stored_hash):
+
     try:
         salt, original_hash = stored_hash.split("$", 1)
 
@@ -100,10 +102,13 @@ def verify_password(password, stored_hash):
 # -------------------------------------------------
 
 def get_secret(name, default=""):
+
     try:
         value = st.secrets.get(name, "")
+
         if value:
             return str(value).strip()
+
     except Exception:
         pass
 
@@ -111,6 +116,7 @@ def get_secret(name, default=""):
 
 
 def get_admin_credentials():
+
     admin_email = get_secret("ADMIN_EMAIL").lower()
     admin_password = get_secret("ADMIN_PASSWORD")
 
@@ -183,6 +189,7 @@ def initialize_database():
         )
 
         # Create or update administrator account.
+
         admin_email, admin_password = get_admin_credentials()
 
         if admin_email and admin_password:
@@ -194,6 +201,7 @@ def initialize_database():
             """, (admin_email,)).fetchone()
 
             if existing_admin:
+
                 conn.execute("""
                     UPDATE users
                     SET role = 'admin',
@@ -206,6 +214,7 @@ def initialize_database():
                 ))
 
             else:
+
                 conn.execute("""
                     INSERT INTO users
                     (name, email, password_hash, role, is_active, created_at)
@@ -231,6 +240,7 @@ def check_admin_status():
         user = None
 
         if admin_email:
+
             user = conn.execute("""
                 SELECT role, is_active
                 FROM users
@@ -262,6 +272,7 @@ def register_user(name, email, password):
         return False, "Password must contain at least 6 characters."
 
     try:
+
         with get_connection() as conn:
 
             conn.execute("""
@@ -278,10 +289,13 @@ def register_user(name, email, password):
         return True, "Account created successfully. Please log in."
 
     except sqlite3.IntegrityError:
+
         return False, "An account with this email already exists."
 
     except sqlite3.Error as error:
+
         print("Registration database error:", repr(error))
+
         return False, "Unable to create your account. Please try again."
 
 
@@ -512,26 +526,25 @@ def set_user_active(user_id, is_active):
 
 
 # -------------------------------------------------
-# Send OTP email using Gmail SSL (Port 465)
+# Send OTP email using Resend HTTPS API
 # -------------------------------------------------
 
 def send_otp_email(email, otp):
 
-    smtp_email = get_secret("SMTP_EMAIL")
-    smtp_password = get_secret("SMTP_APP_PASSWORD")
+    api_key = get_secret("RESEND_API_KEY")
 
-    if not smtp_email or not smtp_password:
+    if not api_key:
+
         raise ValueError(
-            "Email settings are missing. Configure SMTP_EMAIL "
-            "and SMTP_APP_PASSWORD in Streamlit Secrets."
+            "RESEND_API_KEY is missing from Streamlit Secrets."
         )
 
-    message = EmailMessage()
-    message["Subject"] = "StoryBank Password Reset OTP"
-    message["From"] = smtp_email
-    message["To"] = email
+    sender_email = get_secret(
+        "RESEND_FROM_EMAIL",
+        "onboarding@resend.dev"
+    )
 
-    message.set_content(f"""
+    message = f"""
 Hello,
 
 Your StoryBank password reset OTP is:
@@ -543,16 +556,29 @@ This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
 If you did not request this password reset, ignore this email.
 
 StoryBank Team
-""")
+"""
 
-    with smtplib.SMTP_SSL(
-        "smtp.gmail.com",
-        465,
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "from": sender_email,
+            "to": [email],
+            "subject": "StoryBank Password Reset OTP",
+            "text": message
+        },
         timeout=30
-    ) as server:
+    )
 
-        server.login(smtp_email, smtp_password)
-        server.send_message(message)
+    if response.status_code not in (200, 201):
+
+        raise RuntimeError(
+            f"Resend API error ({response.status_code}): "
+            f"{response.text[:500]}"
+        )
 
 
 # -------------------------------------------------
@@ -582,15 +608,27 @@ def send_password_reset_otp(email):
         """, (email,)).fetchone()
 
     if not user:
+
         return False, "Unable to process this request. Check your email address."
 
     if existing:
+
         try:
-            previous_time = datetime.fromisoformat(existing["created_at"])
-            elapsed = (datetime.now() - previous_time).total_seconds()
+
+            previous_time = datetime.fromisoformat(
+                existing["created_at"]
+            )
+
+            elapsed = (
+                datetime.now() - previous_time
+            ).total_seconds()
 
             if elapsed < OTP_RESEND_SECONDS:
-                remaining = int(OTP_RESEND_SECONDS - elapsed) + 1
+
+                remaining = int(
+                    OTP_RESEND_SECONDS - elapsed
+                ) + 1
+
                 return False, (
                     f"Please wait {remaining} seconds before requesting another OTP."
                 )
@@ -611,10 +649,12 @@ def send_password_reset_otp(email):
     ).isoformat(timespec="seconds")
 
     try:
+
         # Send email before saving the OTP.
         send_otp_email(email, otp)
 
         with get_connection() as conn:
+
             conn.execute("""
                 INSERT OR REPLACE INTO password_reset_otps
                 (email, otp_hash, expires_at, created_at, attempts, verified_at)
@@ -629,26 +669,30 @@ def send_password_reset_otp(email):
         return True, "OTP sent successfully to your email."
 
     except ValueError as error:
-        print("OTP email error:", repr(error))
+
+        print("OTP email configuration error:", repr(error))
+
         return False, str(error)
 
-    except smtplib.SMTPAuthenticationError as error:
-        print("OTP email authentication error:", repr(error))
-        return False, "Gmail rejected the SMTP login. Check your Gmail App Password."
+    except requests.RequestException as error:
 
-    except smtplib.SMTPException as error:
-        print("OTP email SMTP error:", repr(error))
+        print("Resend connection error:", repr(error))
+
         return False, (
-            "Gmail SMTP error. "
-            f"Check your Gmail settings ({type(error).__name__})."
+            "Could not connect to the email service. Please try again."
         )
 
-    except OSError as error:
-        print("OTP email connection error:", repr(error))
-        return False, (
-            "Could not connect to Gmail SMTP. "
-            f"Check your connection ({type(error).__name__})."
-        )
+    except RuntimeError as error:
+
+        print("Resend API error:", str(error))
+
+        return False, str(error)
+
+    except sqlite3.Error as error:
+
+        print("OTP database error:", repr(error))
+
+        return False, "Email could not be processed. Please try again."
 
 
 # -------------------------------------------------
@@ -661,6 +705,7 @@ def verify_password_reset_otp(email, otp):
     otp = (otp or "").strip()
 
     if not email or len(otp) != 6 or not otp.isdigit():
+
         return False, "Please enter a valid 6-digit OTP."
 
     with get_connection() as conn:
@@ -672,27 +717,35 @@ def verify_password_reset_otp(email, otp):
         """, (email,)).fetchone()
 
         if not record:
+
             return False, "No OTP request found. Please request a new OTP."
 
         if record["attempts"] >= MAX_OTP_ATTEMPTS:
+
             conn.execute(
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
+
             return False, "Too many incorrect attempts. Please request a new OTP."
 
         if datetime.now() > datetime.fromisoformat(record["expires_at"]):
+
             conn.execute(
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
+
             return False, "OTP has expired. Please request a new one."
 
         entered_hash = hashlib.sha256(
             otp.encode("utf-8")
         ).hexdigest()
 
-        if not hmac.compare_digest(entered_hash, record["otp_hash"]):
+        if not hmac.compare_digest(
+            entered_hash,
+            record["otp_hash"]
+        ):
 
             conn.execute("""
                 UPDATE password_reset_otps
@@ -723,9 +776,11 @@ def reset_password_with_verified_otp(email, new_password):
     email = (email or "").strip().lower()
 
     if not email or not new_password:
+
         return False, "Please enter a new password."
 
     if len(new_password) < 6:
+
         return False, "Password must contain at least 6 characters."
 
     with get_connection() as conn:
@@ -737,19 +792,24 @@ def reset_password_with_verified_otp(email, new_password):
         """, (email,)).fetchone()
 
         if not record:
+
             return False, "Please request and verify your OTP again."
 
         if not record["verified_at"]:
+
             return False, "Please verify your OTP before resetting your password."
 
         if record["attempts"] >= MAX_OTP_ATTEMPTS:
+
             return False, "Too many attempts. Please request a new OTP."
 
         if datetime.now() > datetime.fromisoformat(record["expires_at"]):
+
             conn.execute(
                 "DELETE FROM password_reset_otps WHERE email = ?",
                 (email,)
             )
+
             return False, "OTP has expired. Please request a new OTP."
 
         result = conn.execute("""
@@ -763,6 +823,7 @@ def reset_password_with_verified_otp(email, new_password):
         ))
 
         if result.rowcount == 0:
+
             return False, "Unable to update the password. Account not found."
 
         conn.execute(
