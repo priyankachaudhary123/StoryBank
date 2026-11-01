@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from numbers import Real
 
 from dotenv import load_dotenv
 from groq import Groq
@@ -49,19 +50,34 @@ def validate_story_inputs(selected_terms, word_count, genre):
     """Validate the user's story requirements."""
 
     banking_terms = load_banking_terms()
-    available_terms = {item["term"] for item in banking_terms}
+    available_terms = {
+        item["term"] for item in banking_terms
+    }
 
     if len(selected_terms) != 3:
-        raise ValueError("Please select exactly 3 banking terms.")
+        raise ValueError(
+            "Please select exactly 3 banking terms."
+        )
 
     if len(set(selected_terms)) != 3:
-        raise ValueError("Please select 3 different banking terms.")
+        raise ValueError(
+            "Please select 3 different banking terms."
+        )
 
     if not all(term in available_terms for term in selected_terms):
-        raise ValueError("One or more banking terms are invalid.")
+        raise ValueError(
+            "One or more banking terms are invalid."
+        )
 
-    if not isinstance(word_count, int) or not 50 <= word_count <= 1000:
-        raise ValueError("Word count must be between 50 and 1000.")
+    if (
+        isinstance(word_count, bool)
+        or not isinstance(word_count, Real)
+        or not 50 <= word_count <= 1000
+        or int(word_count) != word_count
+    ):
+        raise ValueError(
+            "Word count must be a whole number between 50 and 1000."
+        )
 
     allowed_genres = {
         "Adventure",
@@ -72,13 +88,17 @@ def validate_story_inputs(selected_terms, word_count, genre):
     }
 
     if genre not in allowed_genres:
-        raise ValueError("Please select a valid story genre.")
+        raise ValueError(
+            "Please select a valid story genre."
+        )
 
     return True
 
 
 def create_story_prompt(selected_terms, word_count, genre):
     """Prepare the prompt for the AI model."""
+
+    word_count = int(word_count)
 
     banking_terms = load_banking_terms()
 
@@ -118,7 +138,13 @@ Requirements:
 def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
 
-    validate_story_inputs(selected_terms, word_count, genre)
+    validate_story_inputs(
+        selected_terms,
+        word_count,
+        genre
+    )
+
+    word_count = int(word_count)
 
     # Get API key
     api_key = os.getenv("GROQ_API_KEY")
