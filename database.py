@@ -28,9 +28,11 @@ OTP_EXPIRY_MINUTES = 10
 OTP_RESEND_SECONDS = 60
 MAX_OTP_ATTEMPTS = 5
 PASSWORD_ITERATIONS = 200000
+
 ROLE_SUPER_ADMIN = "super_admin"
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
+
 VALID_ROLES = {
     ROLE_SUPER_ADMIN,
     ROLE_ADMIN,
@@ -197,8 +199,6 @@ def initialize_database():
         add_column_if_missing(
             conn, "password_reset_otps", "verified_at", "TEXT"
         )
-
-        # The configured administrator is the protected super administrator.
 
         admin_email, admin_password = get_admin_credentials()
 
@@ -552,14 +552,17 @@ def get_login_history():
 # -------------------------------------------------
 
 def _get_user_role(conn, user_id):
+
     user = conn.execute(
         "SELECT role FROM users WHERE id = ?",
         (user_id,)
     ).fetchone()
+
     return user["role"] if user else None
 
 
 def _can_manage_target(actor_role, target_role):
+
     return (
         actor_role == ROLE_SUPER_ADMIN
         and target_role in {ROLE_ADMIN, ROLE_USER}
@@ -615,6 +618,7 @@ def set_user_role(actor_id, user_id, new_role):
             and target_role == ROLE_USER
             and new_role == ROLE_ADMIN
         )
+
         can_manage_as_super_admin = (
             actor_role == ROLE_SUPER_ADMIN
             and target_role in {ROLE_ADMIN, ROLE_USER}
@@ -651,10 +655,12 @@ def delete_user(actor_id, user_id):
             "DELETE FROM login_history WHERE user_id = ?",
             (user_id,)
         )
+
         conn.execute(
             "DELETE FROM story_history WHERE user_id = ?",
             (user_id,)
         )
+
         conn.execute(
             "DELETE FROM users WHERE id = ?",
             (user_id,)
@@ -662,13 +668,19 @@ def delete_user(actor_id, user_id):
 
     return True, "Account deleted."
 
+
 # -------------------------------------------------
-# Send OTP email using SMTP or Resend
+# Send OTP email using Gmail SMTP
 # -------------------------------------------------
 
 def send_otp_email(email, otp):
 
-    message = f"""
+    smtp_email = get_secret("SMTP_EMAIL")
+    smtp_password = get_secret("SMTP_APP_PASSWORD")
+
+    if smtp_email and smtp_password:
+
+        message = f"""
 Hello,
 
 Your StoryBank password reset OTP is:
@@ -682,10 +694,6 @@ If you did not request this password reset, ignore this email.
 StoryBank Team
 """
 
-    smtp_email = get_secret("SMTP_EMAIL")
-    smtp_password = get_secret("SMTP_APP_PASSWORD")
-
-    if smtp_email and smtp_password:
         email_message = EmailMessage()
         email_message["Subject"] = "StoryBank Password Reset OTP"
         email_message["From"] = smtp_email
@@ -697,18 +705,24 @@ StoryBank Team
             int(get_secret("SMTP_PORT", "465")),
             timeout=30
         ) as smtp:
+
             smtp.login(smtp_email, smtp_password)
             smtp.send_message(email_message)
 
         return
 
+    # Optional Resend fallback, only when Gmail SMTP is not configured.
     resend_api_key = get_secret("RESEND_API_KEY")
 
     if resend_api_key:
-        sender_email = get_secret(
-            "RESEND_FROM_EMAIL",
-            "onboarding@resend.dev"
-        )
+
+        sender_email = get_secret("RESEND_FROM_EMAIL")
+
+        if not sender_email:
+            raise ValueError(
+                "Configure RESEND_FROM_EMAIL or Gmail SMTP settings."
+            )
+
         response = requests.post(
             "https://api.resend.com/emails",
             headers={
@@ -719,7 +733,19 @@ StoryBank Team
                 "from": sender_email,
                 "to": [email],
                 "subject": "StoryBank Password Reset OTP",
-                "text": message
+                "text": f"""
+Hello,
+
+Your StoryBank password reset OTP is:
+
+{otp}
+
+This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
+
+If you did not request this password reset, ignore this email.
+
+StoryBank Team
+"""
             },
             timeout=30
         )
@@ -733,51 +759,9 @@ StoryBank Team
         return
 
     raise ValueError(
-        "Configure SMTP_EMAIL and SMTP_APP_PASSWORD, "
-        "or RESEND_API_KEY, to send password reset emails."
+        "Configure SMTP_EMAIL and SMTP_APP_PASSWORD "
+        "using your Gmail App Password."
     )
-
-
-def _legacy_send_otp_email(email, otp):
-
-    smtp_email = get_secret("SMTP_EMAIL")
-    smtp_password = get_secret("SMTP_APP_PASSWORD")
-
-    message = f"""
-Hello,
-
-Your StoryBank password reset OTP is:
-
-{otp}
-
-This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
-
-If you did not request this password reset, ignore this email.
-
-StoryBank Team
-"""
-
-    response = requests.post(
-        "https://api.resend.com/emails",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "from": sender_email,
-            "to": [email],
-            "subject": "StoryBank Password Reset OTP",
-            "text": message
-        },
-        timeout=30
-    )
-
-    if response.status_code not in (200, 201):
-
-        raise RuntimeError(
-            f"Resend API error ({response.status_code}): "
-            f"{response.text[:500]}"
-        )
 
 
 # -------------------------------------------------
@@ -875,7 +859,7 @@ def send_password_reset_otp(email):
 
     except requests.RequestException as error:
 
-        print("Resend connection error:", repr(error))
+        print("Email service connection error:", repr(error))
 
         return False, (
             "Could not connect to the email service. Please try again."
@@ -883,11 +867,10 @@ def send_password_reset_otp(email):
 
     except smtplib.SMTPException as error:
 
-        print("SMTP email error:", repr(error))
+        print("Gmail SMTP error:", repr(error))
 
         return False, (
-            "Could not send the OTP email. Check the email configuration "
-            "and try again."
+            "Could not send the OTP email. Check your Gmail SMTP settings."
         )
 
     except RuntimeError as error:
@@ -896,9 +879,9 @@ def send_password_reset_otp(email):
 
         return False, str(error)
 
-    except sqlite3.Error as error:
+    except (sqlite3.Error, OSError) as error:
 
-        print("OTP database error:", repr(error))
+        print("OTP processing error:", repr(error))
 
         return False, "Email could not be processed. Please try again."
 
