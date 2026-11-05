@@ -1,7 +1,6 @@
 
 import json
 import os
-import re
 from pathlib import Path
 from numbers import Real
 
@@ -14,13 +13,6 @@ load_dotenv(BASE_DIR / ".env")
 
 # Dataset location
 DATASET_PATH = BASE_DIR / "banking_terms.json"
-ALLOWED_GENRES = {
-    "Adventure",
-    "Mystery",
-    "Fantasy",
-    "Comedy",
-    "Educational",
-}
 
 
 def load_banking_terms():
@@ -41,19 +33,13 @@ def load_banking_terms():
 
     if not all(
         isinstance(item, dict)
-        and isinstance(item.get("term"), str)
-        and item["term"].strip()
-        and isinstance(item.get("meaning"), str)
-        and item["meaning"].strip()
+        and "term" in item
+        and "meaning" in item
         for item in banking_terms
     ):
         raise ValueError(
-            "Each banking term must have non-empty 'term' and 'meaning' fields."
+            "Each banking term must have 'term' and 'meaning' fields."
         )
-
-    terms = [item["term"] for item in banking_terms]
-    if len(set(terms)) != len(terms):
-        raise ValueError("The banking dataset contains duplicate terms.")
 
     print(f"Loaded {len(banking_terms)} banking terms.")
 
@@ -62,9 +48,6 @@ def load_banking_terms():
 
 def validate_story_inputs(selected_terms, word_count, genre):
     """Validate the user's story requirements."""
-
-    if not isinstance(selected_terms, (list, tuple)):
-        raise ValueError("Selected banking terms must be provided as a list.")
 
     banking_terms = load_banking_terms()
     available_terms = {
@@ -96,7 +79,15 @@ def validate_story_inputs(selected_terms, word_count, genre):
             "Word count must be a whole number between 50 and 1000."
         )
 
-    if genre not in ALLOWED_GENRES:
+    allowed_genres = {
+        "Adventure",
+        "Mystery",
+        "Fantasy",
+        "Comedy",
+        "Educational"
+    }
+
+    if genre not in allowed_genres:
         raise ValueError(
             "Please select a valid story genre."
         )
@@ -144,56 +135,6 @@ Requirements:
 """
 
 
-def validate_generated_story(story, selected_terms):
-    """Validate that the model returned an educational story for the terms."""
-
-    if not isinstance(story, str) or not story.strip():
-        raise RuntimeError(
-            "The AI returned empty story content."
-        )
-
-    normalized_story = re.sub(
-        r"[^a-z0-9]+",
-        " ",
-        story.casefold()
-    )
-
-    def term_variants(term):
-        normalized_term = re.sub(
-            r"[^a-z0-9]+",
-            " ",
-            term.casefold()
-        ).strip()
-        variants = [normalized_term]
-
-        acronym_match = re.search(
-            r"\(([A-Za-z]{2,})\)",
-            term
-        )
-        if acronym_match:
-            variants.append(acronym_match.group(1).casefold())
-
-        return variants
-
-    missing_terms = [
-        term
-        for term in selected_terms
-        if not any(
-            variant in normalized_story
-            for variant in term_variants(term)
-        )
-    ]
-
-    if missing_terms:
-        missing = ", ".join(missing_terms)
-        raise RuntimeError(
-            "The AI story did not include all selected banking terms. "
-            f"Missing: {missing}. Please try again."
-        )
-
-    return story.strip()
-
-
 def generate_story(selected_terms, word_count, genre):
     """Generate a story using the Groq API."""
 
@@ -231,32 +172,26 @@ def generate_story(selected_terms, word_count, genre):
     # Connect to Groq
     client = Groq(api_key=api_key)
 
-    system_message = (
-        "You are StoryBank, a friendly educational storytelling assistant "
-        "for young learners. Always provide the final story in message "
-        "content. You must write the full selected banking term exactly as "
-        "shown, including its acronym in parentheses when provided."
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are StoryBank, a friendly educational "
+                    "storytelling assistant for young learners. "
+                    "Always provide the final story in message content."
+                )
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.7,
+        max_completion_tokens=4096,
+        reasoning_effort="low"
     )
-
-    def request_story(user_prompt):
-        return client.chat.completions.create(
-            model="openai/gpt-oss-20b",
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_message
-                },
-                {
-                    "role": "user",
-                    "content": user_prompt
-                }
-            ],
-            temperature=0.7,
-            max_completion_tokens=4096,
-            reasoning_effort="low"
-        )
-
-    response = request_story(prompt)
 
     if not response.choices:
         raise RuntimeError(
@@ -264,9 +199,9 @@ def generate_story(selected_terms, word_count, genre):
         )
 
     choice = response.choices[0]
-    story = getattr(choice.message, "content", None)
+    story = choice.message.content
 
-    if not isinstance(story, str) or not story.strip():
+    if not story or not story.strip():
         print("Groq returned empty story content.")
         print("Finish reason:", choice.finish_reason)
         print("Token usage:", response.usage)
@@ -277,37 +212,7 @@ def generate_story(selected_terms, word_count, genre):
             "Check the terminal for diagnostic details."
         )
 
-    try:
-        return validate_generated_story(story, selected_terms)
-    except RuntimeError as first_error:
-        retry_prompt = (
-            f"{prompt}\n\n"
-            "Your previous response did not include every selected term. "
-            "Rewrite the complete story from the beginning. Include each "
-            "of these exact labels verbatim in the story and explain each "
-            "one clearly: "
-            f"{', '.join(selected_terms)}."
-        )
-        retry_response = request_story(retry_prompt)
-
-        if not retry_response.choices:
-            raise RuntimeError(
-                "Groq returned no choices during the story retry."
-            ) from first_error
-
-        retry_choice = retry_response.choices[0]
-        retry_story = getattr(retry_choice.message, "content", None)
-
-        try:
-            return validate_generated_story(
-                retry_story,
-                selected_terms
-            )
-        except RuntimeError as retry_error:
-            raise RuntimeError(
-                f"{retry_error} The AI could not produce a compliant "
-                "story after one retry."
-            ) from retry_error
+    return story.strip()
 
 
 if __name__ == "__main__":
