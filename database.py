@@ -5,57 +5,43 @@ import hmac
 import os
 import secrets
 import json
-import requests
 import smtplib
+
 import streamlit as st
 
-from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from email.message import EmailMessage
 
 
 # -------------------------------------------------
-# Configuration
+# CONFIGURATION
 # -------------------------------------------------
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "storybank.db"
 
-load_dotenv(BASE_DIR / ".env")
+load_dotenv(BASE_DIR / ".env", override=True)
 
 OTP_EXPIRY_MINUTES = 10
 OTP_RESEND_SECONDS = 60
 MAX_OTP_ATTEMPTS = 5
 PASSWORD_ITERATIONS = 200000
 
-ROLE_SUPER_ADMIN = "super_admin"
-ROLE_ADMIN = "admin"
-ROLE_USER = "user"
-
-VALID_ROLES = {
-    ROLE_SUPER_ADMIN,
-    ROLE_ADMIN,
-    ROLE_USER,
-}
-
 
 # -------------------------------------------------
-# Database connection
+# DATABASE CONNECTION
 # -------------------------------------------------
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
-# -------------------------------------------------
-# Safe database migration helper
-# -------------------------------------------------
-
 def add_column_if_missing(conn, table, column, definition):
-
     columns = {
         row["name"]
         for row in conn.execute(
@@ -64,21 +50,16 @@ def add_column_if_missing(conn, table, column, definition):
     }
 
     if column not in columns:
-        try:
-            conn.execute(
-                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
-            )
-        except sqlite3.OperationalError as error:
-            if "duplicate column name" not in str(error).lower():
-                raise
+        conn.execute(
+            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        )
 
 
 # -------------------------------------------------
-# Password security
+# PASSWORD SECURITY
 # -------------------------------------------------
 
 def hash_password(password):
-
     salt = secrets.token_hex(16)
 
     password_hash = hashlib.pbkdf2_hmac(
@@ -92,7 +73,6 @@ def hash_password(password):
 
 
 def verify_password(password, stored_hash):
-
     try:
         salt, original_hash = stored_hash.split("$", 1)
 
@@ -110,11 +90,10 @@ def verify_password(password, stored_hash):
 
 
 # -------------------------------------------------
-# Admin credentials and Streamlit Secrets
+# SECRET CONFIGURATION
 # -------------------------------------------------
 
 def get_secret(name, default=""):
-
     try:
         value = st.secrets.get(name, "")
 
@@ -128,7 +107,6 @@ def get_secret(name, default=""):
 
 
 def get_admin_credentials():
-
     admin_email = get_secret("ADMIN_EMAIL").lower()
     admin_password = get_secret("ADMIN_PASSWORD")
 
@@ -136,7 +114,7 @@ def get_admin_credentials():
 
 
 # -------------------------------------------------
-# Initialize database
+# DATABASE INITIALIZATION
 # -------------------------------------------------
 
 def initialize_database():
@@ -188,6 +166,19 @@ def initialize_database():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                requested_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                reviewed_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (reviewed_by) REFERENCES users(id)
+            )
+        """)
+
         add_column_if_missing(
             conn, "users", "google_sub", "TEXT"
         )
@@ -199,6 +190,8 @@ def initialize_database():
         add_column_if_missing(
             conn, "password_reset_otps", "verified_at", "TEXT"
         )
+
+        # Create or maintain the configured administrator.
 
         admin_email, admin_password = get_admin_credentials()
 
@@ -214,24 +207,12 @@ def initialize_database():
 
                 conn.execute("""
                     UPDATE users
-                    SET role = ?,
+                    SET role = 'admin',
                         password_hash = ?,
                         is_active = 1
                     WHERE id = ?
                 """, (
-                    ROLE_SUPER_ADMIN,
                     hash_password(admin_password),
-                    existing_admin["id"]
-                ))
-
-                conn.execute("""
-                    UPDATE users
-                    SET role = ?
-                    WHERE role = ?
-                      AND id != ?
-                """, (
-                    ROLE_ADMIN,
-                    ROLE_SUPER_ADMIN,
                     existing_admin["id"]
                 ))
 
@@ -239,71 +220,31 @@ def initialize_database():
 
                 conn.execute("""
                     INSERT INTO users
-                    (name, email, password_hash, role, is_active, created_at)
-                    VALUES (?, ?, ?, ?, 1, ?)
+                    (
+                        name,
+                        email,
+                        password_hash,
+                        role,
+                        is_active,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, 'admin', 1, ?)
                 """, (
                     "Administrator",
                     admin_email,
                     hash_password(admin_password),
-                    ROLE_SUPER_ADMIN,
                     datetime.now().isoformat(timespec="seconds")
                 ))
 
-                new_admin = conn.execute("""
-                    SELECT id
-                    FROM users
-                    WHERE LOWER(TRIM(email)) = ?
-                """, (admin_email,)).fetchone()
-
-                conn.execute("""
-                    UPDATE users
-                    SET role = ?
-                    WHERE role = ?
-                      AND id != ?
-                """, (
-                    ROLE_ADMIN,
-                    ROLE_SUPER_ADMIN,
-                    new_admin["id"]
-                ))
-
 
 # -------------------------------------------------
-# Admin diagnostic
-# -------------------------------------------------
-
-def check_admin_status():
-
-    admin_email, admin_password = get_admin_credentials()
-
-    with get_connection() as conn:
-
-        user = None
-
-        if admin_email:
-
-            user = conn.execute("""
-                SELECT role, is_active
-                FROM users
-                WHERE LOWER(TRIM(email)) = ?
-            """, (admin_email,)).fetchone()
-
-    return {
-        "admin_email_configured": bool(admin_email),
-        "admin_password_configured": bool(admin_password),
-        "admin_record_found": user is not None,
-        "admin_role": user["role"] if user else None,
-        "admin_active": bool(user["is_active"]) if user else None
-    }
-
-
-# -------------------------------------------------
-# User registration
+# USER REGISTRATION
 # -------------------------------------------------
 
 def register_user(name, email, password):
 
-    name = (name or "").strip()
-    email = (email or "").strip().lower()
+    name = name.strip()
+    email = email.strip().lower()
 
     if not name or not email or not password:
         return False, "Please fill in all fields."
@@ -315,9 +256,25 @@ def register_user(name, email, password):
 
         with get_connection() as conn:
 
+            existing = conn.execute("""
+                SELECT id
+                FROM users
+                WHERE email = ?
+            """, (email,)).fetchone()
+
+            if existing:
+                return False, "An account with this email already exists."
+
             conn.execute("""
                 INSERT INTO users
-                (name, email, password_hash, role, is_active, created_at)
+                (
+                    name,
+                    email,
+                    password_hash,
+                    role,
+                    is_active,
+                    created_at
+                )
                 VALUES (?, ?, ?, 'user', 1, ?)
             """, (
                 name,
@@ -326,54 +283,42 @@ def register_user(name, email, password):
                 datetime.now().isoformat(timespec="seconds")
             ))
 
-        return True, "Account created successfully. Please log in."
-
-    except sqlite3.IntegrityError:
-
-        return False, "An account with this email already exists."
+        return True, "Account created successfully. You can now log in."
 
     except sqlite3.Error as error:
-
-        print("Registration database error:", repr(error))
-
-        return False, "Unable to create your account. Please try again."
+        return False, f"Registration failed: {error}"
 
 
 # -------------------------------------------------
-# User authentication
+# USER LOGIN
 # -------------------------------------------------
 
 def authenticate_user(email, password):
 
-    email = (email or "").strip().lower()
-
-    if not email or not password:
-        return None
+    email = email.strip().lower()
 
     with get_connection() as conn:
 
         user = conn.execute("""
-            SELECT id, name, email, password_hash, role, is_active
+            SELECT *
             FROM users
             WHERE LOWER(TRIM(email)) = ?
         """, (email,)).fetchone()
 
-    if not user or not user["is_active"]:
+    if not user:
+        return None
+
+    if not user["is_active"]:
         return None
 
     if not verify_password(password, user["password_hash"]):
         return None
 
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "email": user["email"],
-        "role": user["role"]
-    }
+    return dict(user)
 
 
 # -------------------------------------------------
-# Record login
+# LOGIN HISTORY
 # -------------------------------------------------
 
 def record_login(user_id):
@@ -381,7 +326,8 @@ def record_login(user_id):
     with get_connection() as conn:
 
         conn.execute("""
-            INSERT INTO login_history (user_id, login_time)
+            INSERT INTO login_history
+            (user_id, login_time)
             VALUES (?, ?)
         """, (
             user_id,
@@ -389,23 +335,61 @@ def record_login(user_id):
         ))
 
 
+def get_login_history():
+
+    with get_connection() as conn:
+
+        rows = conn.execute("""
+            SELECT
+                users.name,
+                users.email,
+                login_history.login_time
+            FROM login_history
+            JOIN users
+                ON users.id = login_history.user_id
+            ORDER BY login_history.id DESC
+        """).fetchall()
+
+    return [
+        (
+            row["name"],
+            row["email"],
+            row["login_time"]
+        )
+        for row in rows
+    ]
+
+
 # -------------------------------------------------
-# Save generated story
+# SAVE GENERATED STORIES
 # -------------------------------------------------
 
 def save_story(user_id, terms, genre, word_count, story):
 
-    terms_json = json.dumps(terms)
+    if isinstance(terms, (list, tuple)):
+        terms = json.dumps(
+            list(terms),
+            ensure_ascii=False
+        )
+    else:
+        terms = str(terms)
 
     with get_connection() as conn:
 
         conn.execute("""
             INSERT INTO story_history
-            (user_id, terms, genre, word_count, story, created_at)
+            (
+                user_id,
+                terms,
+                genre,
+                word_count,
+                story,
+                created_at
+            )
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
             user_id,
-            terms_json,
+            terms,
             genre,
             word_count,
             story,
@@ -414,366 +398,388 @@ def save_story(user_id, terms, genre, word_count, story):
 
 
 # -------------------------------------------------
-# Get user's stories
+# USER STORY HISTORY
 # -------------------------------------------------
 
 def get_user_stories(user_id):
 
     with get_connection() as conn:
 
-        stories = conn.execute("""
-            SELECT id, terms, genre, word_count, story, created_at
+        rows = conn.execute("""
+            SELECT
+                id,
+                terms,
+                genre,
+                word_count,
+                story,
+                created_at
             FROM story_history
             WHERE user_id = ?
             ORDER BY id DESC
         """, (user_id,)).fetchall()
 
-    result = []
-
-    for story in stories:
-
-        try:
-            terms = json.loads(story["terms"])
-        except (ValueError, TypeError):
-            terms = story["terms"]
-
-        result.append((
-            story["id"],
-            terms,
-            story["genre"],
-            story["word_count"],
-            story["story"],
-            story["created_at"]
-        ))
-
-    return result
+    return [
+        (
+            row["id"],
+            row["terms"],
+            row["genre"],
+            row["word_count"],
+            row["story"],
+            row["created_at"]
+        )
+        for row in rows
+    ]
 
 
 # -------------------------------------------------
-# Get all users (Admin)
+# ALL REGISTERED USERS
 # -------------------------------------------------
 
 def get_all_users():
 
     with get_connection() as conn:
 
-        users = conn.execute("""
-            SELECT id, name, email, role, is_active, created_at
+        rows = conn.execute("""
+            SELECT
+                id,
+                name,
+                email,
+                role,
+                is_active,
+                created_at
             FROM users
             ORDER BY id DESC
         """).fetchall()
 
     return [
         (
-            user["id"],
-            user["name"],
-            user["email"],
-            user["role"],
-            user["is_active"],
-            user["created_at"]
+            row["id"],
+            row["name"],
+            row["email"],
+            row["role"],
+            row["is_active"],
+            row["created_at"]
         )
-        for user in users
+        for row in rows
     ]
 
 
 # -------------------------------------------------
-# Get all stories (Admin)
+# ACTIVATE / DEACTIVATE USERS
+# -------------------------------------------------
+
+def set_user_active(user_id, is_active):
+
+    with get_connection() as conn:
+
+        conn.execute("""
+            UPDATE users
+            SET is_active = ?
+            WHERE id = ?
+            AND role = 'user'
+        """, (
+            1 if is_active else 0,
+            user_id
+        ))
+
+
+# -------------------------------------------------
+# ALL GENERATED STORIES
 # -------------------------------------------------
 
 def get_all_stories():
 
     with get_connection() as conn:
 
-        stories = conn.execute("""
+        rows = conn.execute("""
             SELECT
-                s.id,
-                u.name,
-                u.email,
-                s.terms,
-                s.genre,
-                s.word_count,
-                s.story,
-                s.created_at
-            FROM story_history s
-            JOIN users u ON s.user_id = u.id
-            ORDER BY s.id DESC
-        """).fetchall()
-
-    result = []
-
-    for story in stories:
-
-        try:
-            terms = json.loads(story["terms"])
-        except (ValueError, TypeError):
-            terms = story["terms"]
-
-        result.append((
-            story["id"],
-            story["name"],
-            story["email"],
-            terms,
-            story["genre"],
-            story["word_count"],
-            story["story"],
-            story["created_at"]
-        ))
-
-    return result
-
-
-# -------------------------------------------------
-# Get login history (Admin)
-# -------------------------------------------------
-
-def get_login_history():
-
-    with get_connection() as conn:
-
-        history = conn.execute("""
-            SELECT u.name, u.email, l.login_time
-            FROM login_history l
-            JOIN users u ON l.user_id = u.id
-            ORDER BY l.id DESC
+                story_history.id,
+                users.name,
+                users.email,
+                story_history.terms,
+                story_history.genre,
+                story_history.word_count,
+                story_history.story,
+                story_history.created_at
+            FROM story_history
+            JOIN users
+                ON users.id = story_history.user_id
+            ORDER BY story_history.id DESC
         """).fetchall()
 
     return [
         (
-            item["name"],
-            item["email"],
-            item["login_time"]
+            row["id"],
+            row["name"],
+            row["email"],
+            row["terms"],
+            row["genre"],
+            row["word_count"],
+            row["story"],
+            row["created_at"]
         )
-        for item in history
+        for row in rows
     ]
 
 
 # -------------------------------------------------
-# Activate / deactivate users (Admin)
+# DASHBOARD STATISTICS
 # -------------------------------------------------
 
-def _get_user_role(conn, user_id):
-
-    user = conn.execute(
-        "SELECT role FROM users WHERE id = ?",
-        (user_id,)
-    ).fetchone()
-
-    return user["role"] if user else None
-
-
-def _can_manage_target(actor_role, target_role):
-
-    return (
-        actor_role == ROLE_SUPER_ADMIN
-        and target_role in {ROLE_ADMIN, ROLE_USER}
-    )
-
-
-def set_user_active(actor_id, user_id, is_active):
+def get_dashboard_stats():
 
     with get_connection() as conn:
 
-        actor_role = _get_user_role(conn, actor_id)
-        target_role = _get_user_role(conn, user_id)
+        total_users = conn.execute("""
+            SELECT COUNT(*) FROM users
+        """).fetchone()[0]
 
-        if not actor_role or not target_role:
+        total_admins = conn.execute("""
+            SELECT COUNT(*)
+            FROM users
+            WHERE role = 'admin'
+        """).fetchone()[0]
+
+        total_regular_users = conn.execute("""
+            SELECT COUNT(*)
+            FROM users
+            WHERE role = 'user'
+        """).fetchone()[0]
+
+        total_stories = conn.execute("""
+            SELECT COUNT(*) FROM story_history
+        """).fetchone()[0]
+
+    return {
+        "total_users": total_users,
+        "total_admins": total_admins,
+        "total_regular_users": total_regular_users,
+        "total_stories": total_stories
+    }
+
+
+# -------------------------------------------------
+# USER STORY COUNTS
+# -------------------------------------------------
+
+def get_user_story_counts():
+
+    with get_connection() as conn:
+
+        rows = conn.execute("""
+            SELECT
+                users.id,
+                users.name,
+                users.email,
+                users.role,
+                users.is_active,
+                COUNT(story_history.id) AS story_count
+            FROM users
+            LEFT JOIN story_history
+                ON users.id = story_history.user_id
+            GROUP BY users.id
+            ORDER BY story_count DESC
+        """).fetchall()
+
+    return [
+        (
+            row["id"],
+            row["name"],
+            row["email"],
+            row["role"],
+            row["is_active"],
+            row["story_count"]
+        )
+        for row in rows
+    ]
+
+
+# -------------------------------------------------
+# GET USER ADMIN REQUEST
+# -------------------------------------------------
+
+def get_user_admin_request(user_id):
+
+    with get_connection() as conn:
+
+        row = conn.execute("""
+            SELECT
+                id,
+                status,
+                requested_at,
+                reviewed_at
+            FROM admin_requests
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """, (user_id,)).fetchone()
+
+    return dict(row) if row else None
+
+
+# -------------------------------------------------
+# REQUEST ADMIN ACCESS
+# -------------------------------------------------
+
+def request_admin_access(user_id):
+
+    with get_connection() as conn:
+
+        user = conn.execute("""
+            SELECT id, role, is_active
+            FROM users
+            WHERE id = ?
+        """, (user_id,)).fetchone()
+
+        if not user:
             return False, "User account not found."
 
-        if actor_id == user_id:
-            return False, "You cannot change your own account status."
+        if not user["is_active"]:
+            return False, "Your account is inactive."
 
-        if not _can_manage_target(actor_role, target_role):
-            return False, "You do not have permission to manage this account."
+        if user["role"] == "admin":
+            return False, "You already have administrator access."
+
+        pending = conn.execute("""
+            SELECT id
+            FROM admin_requests
+            WHERE user_id = ?
+            AND status = 'pending'
+        """, (user_id,)).fetchone()
+
+        if pending:
+            return False, "Your request is already pending."
 
         conn.execute("""
-            UPDATE users
-            SET is_active = ?
-            WHERE id = ?
+            INSERT INTO admin_requests
+            (user_id, status, requested_at)
+            VALUES (?, 'pending', ?)
         """, (
-            1 if is_active else 0,
-            user_id
+            user_id,
+            datetime.now().isoformat(timespec="seconds")
         ))
 
-    return True, "Account status updated."
+    return True, "Admin access request submitted successfully."
 
 
-def set_user_role(actor_id, user_id, new_role):
+# -------------------------------------------------
+# GET PENDING ADMIN REQUESTS
+# -------------------------------------------------
 
-    if new_role not in VALID_ROLES or new_role == ROLE_SUPER_ADMIN:
-        return False, "Invalid role assignment."
+def get_pending_admin_requests():
 
     with get_connection() as conn:
 
-        actor_role = _get_user_role(conn, actor_id)
-        target_role = _get_user_role(conn, user_id)
+        rows = conn.execute("""
+            SELECT
+                admin_requests.id AS request_id,
+                users.id AS user_id,
+                users.name,
+                users.email,
+                admin_requests.requested_at
+            FROM admin_requests
+            JOIN users
+                ON users.id = admin_requests.user_id
+            WHERE admin_requests.status = 'pending'
+            ORDER BY admin_requests.requested_at ASC
+        """).fetchall()
 
-        if not actor_role or not target_role:
-            return False, "User account not found."
-
-        if actor_id == user_id:
-            return False, "You cannot change your own role."
-
-        can_promote_user = (
-            actor_role == ROLE_ADMIN
-            and target_role == ROLE_USER
-            and new_role == ROLE_ADMIN
+    return [
+        (
+            row["request_id"],
+            row["user_id"],
+            row["name"],
+            row["email"],
+            row["requested_at"]
         )
-
-        can_manage_as_super_admin = (
-            actor_role == ROLE_SUPER_ADMIN
-            and target_role in {ROLE_ADMIN, ROLE_USER}
-        )
-
-        if not can_promote_user and not can_manage_as_super_admin:
-            return False, "Only the super administrator can remove admin access."
-
-        conn.execute(
-            "UPDATE users SET role = ? WHERE id = ?",
-            (new_role, user_id)
-        )
-
-    return True, "User role updated."
+        for row in rows
+    ]
 
 
-def delete_user(actor_id, user_id):
+# -------------------------------------------------
+# APPROVE OR REJECT ADMIN REQUEST
+# -------------------------------------------------
+
+def review_admin_request(request_id, admin_user_id, decision):
+
+    if decision not in ("approved", "rejected"):
+        return False, "Invalid decision."
 
     with get_connection() as conn:
 
-        actor_role = _get_user_role(conn, actor_id)
-        target_role = _get_user_role(conn, user_id)
+        admin = conn.execute("""
+            SELECT id, role, is_active
+            FROM users
+            WHERE id = ?
+        """, (admin_user_id,)).fetchone()
 
-        if not actor_role or not target_role:
-            return False, "User account not found."
+        if (
+            not admin
+            or admin["role"] != "admin"
+            or not admin["is_active"]
+        ):
+            return False, "Only an active administrator can review requests."
 
-        if actor_id == user_id:
-            return False, "You cannot delete your own account."
+        request = conn.execute("""
+            SELECT id, user_id, status
+            FROM admin_requests
+            WHERE id = ?
+        """, (request_id,)).fetchone()
 
-        if not _can_manage_target(actor_role, target_role):
-            return False, "You do not have permission to delete this account."
+        if not request:
+            return False, "Admin request not found."
 
-        conn.execute(
-            "DELETE FROM login_history WHERE user_id = ?",
-            (user_id,)
-        )
+        if request["status"] != "pending":
+            return False, "This request has already been reviewed."
 
-        conn.execute(
-            "DELETE FROM story_history WHERE user_id = ?",
-            (user_id,)
-        )
+        target_user = conn.execute("""
+            SELECT id, is_active
+            FROM users
+            WHERE id = ?
+        """, (request["user_id"],)).fetchone()
 
-        conn.execute(
-            "DELETE FROM users WHERE id = ?",
-            (user_id,)
-        )
+        if not target_user or not target_user["is_active"]:
+            return False, "The requesting user is not active."
 
-    return True, "Account deleted."
+        conn.execute("""
+            UPDATE admin_requests
+            SET status = ?,
+                reviewed_at = ?,
+                reviewed_by = ?
+            WHERE id = ?
+        """, (
+            decision,
+            datetime.now().isoformat(timespec="seconds"),
+            admin_user_id,
+            request_id
+        ))
 
+        if decision == "approved":
 
-# -------------------------------------------------
-# Send OTP email using Gmail SMTP
-# -------------------------------------------------
+            conn.execute("""
+                UPDATE users
+                SET role = 'admin'
+                WHERE id = ?
+            """, (request["user_id"],))
 
-def send_otp_email(email, otp):
+    if decision == "approved":
+        return True, "Admin access approved successfully."
 
-    smtp_email = get_secret("SMTP_EMAIL")
-    smtp_password = get_secret("SMTP_APP_PASSWORD")
-
-    if smtp_email and smtp_password:
-
-        message = f"""
-Hello,
-
-Your StoryBank password reset OTP is:
-
-{otp}
-
-This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
-
-If you did not request this password reset, ignore this email.
-
-StoryBank Team
-"""
-
-        email_message = EmailMessage()
-        email_message["Subject"] = "StoryBank Password Reset OTP"
-        email_message["From"] = smtp_email
-        email_message["To"] = email
-        email_message.set_content(message)
-
-        with smtplib.SMTP_SSL(
-            get_secret("SMTP_HOST", "smtp.gmail.com"),
-            int(get_secret("SMTP_PORT", "465")),
-            timeout=30
-        ) as smtp:
-
-            smtp.login(smtp_email, smtp_password)
-            smtp.send_message(email_message)
-
-        return
-
-    # Optional Resend fallback, only when Gmail SMTP is not configured.
-    resend_api_key = get_secret("RESEND_API_KEY")
-
-    if resend_api_key:
-
-        sender_email = get_secret("RESEND_FROM_EMAIL")
-
-        if not sender_email:
-            raise ValueError(
-                "Configure RESEND_FROM_EMAIL or Gmail SMTP settings."
-            )
-
-        response = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {resend_api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "from": sender_email,
-                "to": [email],
-                "subject": "StoryBank Password Reset OTP",
-                "text": f"""
-Hello,
-
-Your StoryBank password reset OTP is:
-
-{otp}
-
-This OTP is valid for {OTP_EXPIRY_MINUTES} minutes.
-
-If you did not request this password reset, ignore this email.
-
-StoryBank Team
-"""
-            },
-            timeout=30
-        )
-
-        if response.status_code not in (200, 201):
-            raise RuntimeError(
-                f"Resend API error ({response.status_code}): "
-                f"{response.text[:500]}"
-            )
-
-        return
-
-    raise ValueError(
-        "Configure SMTP_EMAIL and SMTP_APP_PASSWORD "
-        "using your Gmail App Password."
-    )
+    return True, "Admin access request rejected."
 
 
 # -------------------------------------------------
-# Send password reset OTP
+# SEND PASSWORD RESET OTP USING GMAIL SMTP
 # -------------------------------------------------
 
 def send_password_reset_otp(email):
 
-    email = (email or "").strip().lower()
+    email = email.strip().lower()
 
     if not email:
-        return False, "Please enter your email address."
+        return False, "Enter your email address."
+
+    # Check whether the email belongs to a registered user.
 
     with get_connection() as conn:
 
@@ -781,156 +787,242 @@ def send_password_reset_otp(email):
             SELECT id
             FROM users
             WHERE LOWER(TRIM(email)) = ?
-              AND is_active = 1
         """, (email,)).fetchone()
 
-        existing = conn.execute("""
+    if not user:
+        return False, "No account found with this email address."
+
+    now = datetime.now()
+
+    # Check OTP resend limit.
+
+    with get_connection() as conn:
+
+        previous = conn.execute("""
             SELECT created_at
             FROM password_reset_otps
             WHERE email = ?
         """, (email,)).fetchone()
 
-    if not user:
+        if previous:
 
-        return False, "Unable to process this request. Check your email address."
-
-    if existing:
-
-        try:
-
-            previous_time = datetime.fromisoformat(
-                existing["created_at"]
-            )
-
-            elapsed = (
-                datetime.now() - previous_time
-            ).total_seconds()
-
-            if elapsed < OTP_RESEND_SECONDS:
-
-                remaining = int(
-                    OTP_RESEND_SECONDS - elapsed
-                ) + 1
-
-                return False, (
-                    f"Please wait {remaining} seconds before requesting another OTP."
+            try:
+                previous_time = datetime.fromisoformat(
+                    previous["created_at"]
                 )
 
-        except (ValueError, TypeError):
-            pass
+                elapsed = (now - previous_time).total_seconds()
 
-    otp = f"{secrets.randbelow(1000000):06d}"
+                if elapsed < OTP_RESEND_SECONDS:
+
+                    wait = int(OTP_RESEND_SECONDS - elapsed) + 1
+
+                    return False, (
+                        f"Please wait {wait} seconds "
+                        "before requesting another OTP."
+                    )
+
+            except ValueError:
+                pass
+
+    # Gmail SMTP settings.
+
+    smtp_email = get_secret("SMTP_EMAIL")
+    smtp_password = get_secret("SMTP_APP_PASSWORD").replace(" ", "")
+    smtp_host = get_secret("SMTP_HOST", "smtp.gmail.com")
+
+    try:
+        smtp_port = int(get_secret("SMTP_PORT", "465"))
+    except (ValueError, TypeError):
+        return False, "Invalid SMTP_PORT. Use 465 or 587."
+
+    if not smtp_email or not smtp_password:
+
+        return False, (
+            "Gmail SMTP is not configured. "
+            "Check SMTP_EMAIL and SMTP_APP_PASSWORD "
+            "in your .env file."
+        )
+
+    # Generate OTP.
+
+    otp = str(secrets.randbelow(900000) + 100000)
 
     otp_hash = hashlib.sha256(
-        otp.encode("utf-8")
+        otp.encode()
     ).hexdigest()
 
-    now = datetime.now()
+    created_at = now.isoformat(timespec="seconds")
 
     expires_at = (
         now + timedelta(minutes=OTP_EXPIRY_MINUTES)
     ).isoformat(timespec="seconds")
 
+    # Prepare email.
+
+    message = EmailMessage()
+
+    message["Subject"] = "StoryBank Password Reset OTP"
+    message["From"] = smtp_email
+    message["To"] = email
+
+    message.set_content(
+        f"""
+Hello,
+
+Your StoryBank password reset OTP is: {otp}
+
+This OTP expires in 10 minutes.
+
+If you did not request this password reset,
+please ignore this email.
+
+Thank you,
+StoryBank Team
+"""
+    )
+
+    message.add_alternative(
+        f"""
+        <html>
+            <body>
+                <h2>StoryBank Password Reset</h2>
+                <p>Your OTP is:</p>
+                <h1>{otp}</h1>
+                <p>This OTP expires in 10 minutes.</p>
+                <p>If you did not request this,
+                please ignore this email.</p>
+                <p>Thank you,<br>StoryBank Team</p>
+            </body>
+        </html>
+        """,
+        subtype="html"
+    )
+
     try:
 
-        # Send email before saving the OTP.
-        send_otp_email(email, otp)
+        # Connect to Gmail and send the email.
+
+        if smtp_port == 465:
+
+            with smtplib.SMTP_SSL(
+                smtp_host,
+                smtp_port,
+                timeout=20
+            ) as server:
+
+                server.login(smtp_email, smtp_password)
+                server.send_message(message)
+
+        else:
+
+            with smtplib.SMTP(
+                smtp_host,
+                smtp_port,
+                timeout=20
+            ) as server:
+
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+
+                server.login(smtp_email, smtp_password)
+                server.send_message(message)
+
+        # Save OTP after successful email sending.
 
         with get_connection() as conn:
 
             conn.execute("""
                 INSERT OR REPLACE INTO password_reset_otps
-                (email, otp_hash, expires_at, created_at, attempts, verified_at)
+                (
+                    email,
+                    otp_hash,
+                    expires_at,
+                    created_at,
+                    attempts,
+                    verified_at
+                )
                 VALUES (?, ?, ?, ?, 0, NULL)
             """, (
                 email,
                 otp_hash,
                 expires_at,
-                now.isoformat(timespec="seconds")
+                created_at
             ))
 
         return True, "OTP sent successfully to your email."
 
-    except ValueError as error:
-
-        print("OTP email configuration error:", repr(error))
-
-        return False, str(error)
-
-    except requests.RequestException as error:
-
-        print("Email service connection error:", repr(error))
+    except smtplib.SMTPAuthenticationError:
 
         return False, (
-            "Could not connect to the email service. Please try again."
+            "Gmail authentication failed. "
+            "Check your Gmail App Password."
         )
 
-    except smtplib.SMTPException as error:
-
-        print("Gmail SMTP error:", repr(error))
+    except smtplib.SMTPRecipientsRefused:
 
         return False, (
-            "Could not send the OTP email. Check your Gmail SMTP settings."
+            "Gmail could not send the OTP to this recipient. "
+            "Please check the email address."
         )
 
-    except RuntimeError as error:
+    except (smtplib.SMTPException, OSError) as error:
 
-        print("Resend API error:", str(error))
+        print("Gmail SMTP error:", str(error))
 
-        return False, str(error)
+        return False, (
+            "Unable to send OTP using Gmail. "
+            "Check your SMTP settings and internet connection."
+        )
 
-    except (sqlite3.Error, OSError) as error:
+    except Exception as error:
 
-        print("OTP processing error:", repr(error))
+        print("Unexpected OTP email error:", str(error))
 
-        return False, "Email could not be processed. Please try again."
+        return False, (
+            "An unexpected error occurred while sending OTP."
+        )
 
 
 # -------------------------------------------------
-# Verify password reset OTP
+# VERIFY PASSWORD RESET OTP
 # -------------------------------------------------
 
 def verify_password_reset_otp(email, otp):
 
-    email = (email or "").strip().lower()
-    otp = (otp or "").strip()
-
-    if not email or len(otp) != 6 or not otp.isdigit():
-
-        return False, "Please enter a valid 6-digit OTP."
+    email = email.strip().lower()
+    otp = otp.strip()
 
     with get_connection() as conn:
 
         record = conn.execute("""
-            SELECT otp_hash, expires_at, attempts
+            SELECT *
             FROM password_reset_otps
             WHERE email = ?
         """, (email,)).fetchone()
 
         if not record:
+            return False, "Please request an OTP first."
 
-            return False, "No OTP request found. Please request a new OTP."
+        if record["verified_at"]:
+            return True, "OTP already verified."
 
         if record["attempts"] >= MAX_OTP_ATTEMPTS:
 
-            conn.execute(
-                "DELETE FROM password_reset_otps WHERE email = ?",
-                (email,)
+            return False, (
+                "Too many incorrect attempts. "
+                "Request a new OTP."
             )
 
-            return False, "Too many incorrect attempts. Please request a new OTP."
+        if datetime.now() > datetime.fromisoformat(
+            record["expires_at"]
+        ):
 
-        if datetime.now() > datetime.fromisoformat(record["expires_at"]):
-
-            conn.execute(
-                "DELETE FROM password_reset_otps WHERE email = ?",
-                (email,)
-            )
-
-            return False, "OTP has expired. Please request a new one."
+            return False, "OTP expired. Please request a new OTP."
 
         entered_hash = hashlib.sha256(
-            otp.encode("utf-8")
+            otp.encode()
         ).hexdigest()
 
         if not hmac.compare_digest(
@@ -959,67 +1051,65 @@ def verify_password_reset_otp(email, otp):
 
 
 # -------------------------------------------------
-# Reset password after OTP verification
+# RESET PASSWORD AFTER OTP VERIFICATION
 # -------------------------------------------------
 
 def reset_password_with_verified_otp(email, new_password):
 
-    email = (email or "").strip().lower()
+    email = email.strip().lower()
 
     if not email or not new_password:
-
-        return False, "Please enter a new password."
+        return False, "Please fill in all fields."
 
     if len(new_password) < 6:
-
         return False, "Password must contain at least 6 characters."
 
     with get_connection() as conn:
 
         record = conn.execute("""
-            SELECT expires_at, attempts, verified_at
+            SELECT verified_at, expires_at
             FROM password_reset_otps
             WHERE email = ?
         """, (email,)).fetchone()
 
         if not record:
-
-            return False, "Please request and verify your OTP again."
+            return False, "Please request an OTP first."
 
         if not record["verified_at"]:
+            return False, "Please verify your OTP first."
 
-            return False, "Please verify your OTP before resetting your password."
+        if datetime.now() > datetime.fromisoformat(
+            record["expires_at"]
+        ):
 
-        if record["attempts"] >= MAX_OTP_ATTEMPTS:
+            conn.execute("""
+                DELETE FROM password_reset_otps
+                WHERE email = ?
+            """, (email,))
 
-            return False, "Too many attempts. Please request a new OTP."
+            return False, "OTP expired. Please request a new OTP."
 
-        if datetime.now() > datetime.fromisoformat(record["expires_at"]):
+        user = conn.execute("""
+            SELECT id
+            FROM users
+            WHERE LOWER(TRIM(email)) = ?
+        """, (email,)).fetchone()
 
-            conn.execute(
-                "DELETE FROM password_reset_otps WHERE email = ?",
-                (email,)
-            )
+        if not user:
+            return False, "User account not found."
 
-            return False, "OTP has expired. Please request a new OTP."
-
-        result = conn.execute("""
+        conn.execute("""
             UPDATE users
             SET password_hash = ?
-            WHERE LOWER(TRIM(email)) = ?
-              AND is_active = 1
+            WHERE id = ?
         """, (
             hash_password(new_password),
-            email
+            user["id"]
         ))
 
-        if result.rowcount == 0:
+        conn.execute("""
+            DELETE FROM password_reset_otps
+            WHERE email = ?
+        """, (email,))
 
-            return False, "Unable to update the password. Account not found."
-
-        conn.execute(
-            "DELETE FROM password_reset_otps WHERE email = ?",
-            (email,)
-        )
-
-    return True, "Password reset successfully. Please log in."
+    return True, "Password reset successfully. You can now log in."
