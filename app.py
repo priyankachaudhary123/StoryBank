@@ -1,5 +1,5 @@
-
 import streamlit as st
+from textwrap import dedent
 
 from backend import load_banking_terms, generate_story
 
@@ -14,48 +14,392 @@ from database import (
     get_all_stories,
     get_login_history,
     set_user_active,
-    set_user_role,
-    delete_user,
     send_password_reset_otp,
     verify_password_reset_otp,
     reset_password_with_verified_otp,
+    get_user_admin_request,
+    request_admin_access,
+    get_pending_admin_requests,
+    review_admin_request,
+    get_user_story_counts,
+    get_dashboard_stats,
 )
 
 
-# -----------------------------
-# Page configuration
-# -----------------------------
+# =========================================
+# PAGE CONFIGURATION
+# =========================================
+
 st.set_page_config(
-    page_title="StoryBank",
+    page_title="StoryBank | AI Banking Stories",
     page_icon="📚",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
-# -----------------------------
-# Initialize database
-# -----------------------------
+# =========================================
+# PROFESSIONAL DESIGN
+# =========================================
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {
+    --navy: #172554;
+    --blue: #3157d5;
+    --purple: #7657d5;
+    --muted: #64748b;
+    --border: #e5eaf3;
+    --background: #f5f7fc;
+}
+
+.stApp {
+    background: var(--background);
+    font-family: 'DM Sans', sans-serif;
+}
+
+.block-container {
+    max-width: 1220px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+h1, h2, h3, h4 {
+    color: var(--navy);
+    font-family: 'Manrope', sans-serif;
+}
+
+p, label, span {
+    font-family: 'DM Sans', sans-serif;
+}
+
+[data-testid="stSidebar"] {
+    background: #ffffff;
+    border-right: 1px solid var(--border);
+}
+
+[data-testid="stSidebar"] .block-container {
+    padding-top: 1.5rem;
+}
+
+div[data-testid="stMetric"] {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    padding: 19px;
+    border-radius: 17px;
+    box-shadow: 0 5px 18px rgba(20,33,61,.04);
+}
+
+div[data-testid="stMetric"] label {
+    color: var(--muted);
+    font-weight: 600;
+}
+
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: var(--navy);
+    font-family: 'Manrope', sans-serif;
+    font-weight: 800;
+}
+
+div[data-testid="stForm"] {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 1.4rem;
+    box-shadow: 0 8px 28px rgba(20,33,61,.045);
+}
+
+div.stButton > button,
+div.stFormSubmitButton > button,
+div.stDownloadButton > button {
+    border-radius: 11px;
+    min-height: 2.75rem;
+    font-weight: 650;
+    border: 1px solid #d8def0;
+    transition: all .2s ease;
+}
+
+div.stButton > button:hover,
+div.stDownloadButton > button:hover {
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+div.stButton > button[kind="primary"],
+div.stFormSubmitButton > button[kind="primary"] {
+    background: linear-gradient(105deg, var(--blue), var(--purple));
+    color: white;
+    border: none;
+}
+
+div.stButton > button[kind="primary"]:hover,
+div.stFormSubmitButton > button[kind="primary"]:hover {
+    color: white;
+    box-shadow: 0 6px 18px rgba(80,80,190,.22);
+}
+
+div[data-baseweb="input"] input,
+div[data-baseweb="select"] > div,
+div[data-baseweb="textarea"] textarea {
+    border-radius: 10px;
+}
+
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 10px 10px 0 0;
+    font-weight: 600;
+}
+
+.stTabs [aria-selected="true"] {
+    color: var(--blue);
+}
+
+.sb-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: .3rem 0 1.5rem;
+}
+
+.sb-logo {
+    width: 57px;
+    height: 57px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 17px;
+    background: linear-gradient(135deg,#3157d5,#8b5cf6);
+    color: white;
+    font-size: 29px;
+    box-shadow: 0 8px 22px rgba(49,87,213,.22);
+}
+
+.sb-brand-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 2.3rem;
+    font-weight: 800;
+    letter-spacing: -.06em;
+    color: var(--navy);
+}
+
+.sb-hero {
+    padding: 2.8rem;
+    border-radius: 27px;
+    color: white;
+    background:
+        radial-gradient(circle at 85% 15%, rgba(167,139,250,.42), transparent 28%),
+        linear-gradient(120deg,#14213d 0%,#233d78 58%,#5541a8 100%);
+    box-shadow: 0 18px 45px rgba(28,43,91,.16);
+    margin-bottom: 1.8rem;
+}
+
+.sb-eyebrow {
+    display: inline-block;
+    padding: 7px 13px;
+    border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.10);
+    border-radius: 30px;
+    color: #e4e8ff;
+    font-size: .82rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+}
+
+.sb-hero h1 {
+    color: white !important;
+    font-size: clamp(2.2rem,5vw,3.4rem);
+    line-height: 1.12;
+    margin: 1rem 0 .9rem;
+}
+
+.sb-hero p {
+    color: #e5eaff !important;
+    font-size: 1.08rem;
+    line-height: 1.8;
+    max-width: 790px;
+}
+
+.sb-hero-note {
+    display: inline-block;
+    color: #ffffff;
+    font-weight: 700;
+    margin-top: 1rem;
+    padding: 10px 15px;
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 12px;
+}
+
+.sb-section-title {
+    color: var(--navy);
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.55rem;
+    font-weight: 800;
+    margin: 1.8rem 0 .25rem;
+}
+
+.sb-section-sub {
+    color: var(--muted);
+    margin-bottom: 1rem;
+}
+
+.sb-feature, .sb-step {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 17px;
+    padding: 1.2rem;
+    box-shadow: 0 7px 22px rgba(20,33,61,.035);
+    height: 100%;
+}
+
+.sb-feature {
+    min-height: 175px;
+}
+
+.sb-feature-icon {
+    font-size: 1.8rem;
+    margin-bottom: .55rem;
+}
+
+.sb-feature h3, .sb-step h3 {
+    font-size: 1.03rem;
+    margin: .25rem 0 .5rem;
+}
+
+.sb-feature p, .sb-step p {
+    color: var(--muted);
+    font-size: .91rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.sb-step {
+    min-height: 145px;
+}
+
+.sb-step-num {
+    color: var(--blue);
+    font-weight: 800;
+    font-size: .82rem;
+    letter-spacing: .06em;
+}
+
+.sb-auth-heading {
+    text-align: center;
+    margin: 2.5rem 0 .25rem;
+    color: var(--navy);
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+}
+
+.sb-auth-sub {
+    text-align: center;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+}
+
+.sb-dashboard-hero {
+    padding: 1.8rem 2rem;
+    border-radius: 21px;
+    color: white;
+    background: linear-gradient(115deg,#172554,#3157a5 65%,#7657d5);
+    margin-bottom: 1.5rem;
+    box-shadow: 0 12px 30px rgba(28,43,91,.12);
+}
+
+.sb-dashboard-hero h1 {
+    color: white !important;
+    font-size: 2rem;
+    margin: .2rem 0 .4rem;
+}
+
+.sb-dashboard-hero p {
+    color: #e5eaff !important;
+    margin: 0;
+}
+
+.sb-dashboard-label {
+    color: #dbe4ff;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+}
+
+.sb-footer {
+    text-align: center;
+    color: #94a3b8;
+    font-size: .85rem;
+    padding-top: 1.8rem;
+}
+
+@media (max-width: 700px) {
+    .block-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .sb-hero {
+        padding: 1.7rem 1.3rem;
+    }
+
+    .sb-brand-name {
+        font-size: 1.9rem;
+    }
+
+    .sb-dashboard-hero {
+        padding: 1.4rem;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================
+# HTML RENDERING HELPER
+# =========================================
+
+def render_html(content):
+    st.markdown(
+        dedent(content).strip(),
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================
+# INITIALIZE DATABASE
+# =========================================
+
 initialize_database()
 
 
-# -----------------------------
-# Session state
-# -----------------------------
-defaults = {
+# =========================================
+# SESSION STATE
+# =========================================
+
+DEFAULTS = {
     "user": None,
     "reset_email": "",
     "otp_verified": False,
-    "generated_story": ""
+    "generated_story": "",
+    "story_owner": None,
 }
 
-for key, value in defaults.items():
+for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
 
-# -----------------------------
-# Load banking terms
-# -----------------------------
+# =========================================
+# LOAD BANKING TERMS
+# =========================================
+
 @st.cache_data
 def get_terms():
 
@@ -75,351 +419,498 @@ def get_terms():
     else:
         terms = []
 
-    return sorted(
-        set(
-            str(term).strip()
-            for term in terms
-            if isinstance(term, str) and term.strip()
-        )
-    )
+    return sorted(set(
+        str(x).strip()
+        for x in terms
+        if isinstance(x, str) and x.strip()
+    ))
 
 
-# -----------------------------
-# Logout
-# -----------------------------
+# =========================================
+# LOGOUT
+# =========================================
+
 def logout():
 
-    st.session_state.user = None
-    st.session_state.reset_email = ""
-    st.session_state.otp_verified = False
-    st.session_state.generated_story = ""
+    for key, value in DEFAULTS.items():
+        st.session_state[key] = value
 
     st.rerun()
 
 
-def show_profile_sidebar(user):
+# =========================================
+# BRAND HEADER
+# =========================================
 
-    with st.sidebar:
+def brand_header():
 
-        st.title("StoryBank")
-        st.caption("Your learning workspace")
-
-        with st.expander("👤 Profile", expanded=True):
-
-            st.write(f"**{user['name']}**")
-            st.caption(user["email"])
-            st.write(f"Role: **{user['role'].replace('_', ' ').title()}**")
-
-            if st.button("Logout", use_container_width=True):
-                logout()
-
-
-@st.dialog("Confirm account action")
-def confirm_account_action(actor, target, action, new_role=None):
-
-    action_labels = {
-        "activate": "activate",
-        "deactivate": "deactivate",
-        "promote": "promote to administrator",
-        "demote": "change to a regular user",
-        "delete": "permanently delete",
-    }
-    action_label = action_labels[action]
-
-    st.warning(
-        f"Are you sure you want to {action_label} {target['name']}?"
-    )
-
-    if action == "delete":
-        st.caption(
-            "This permanently removes the account, login history, and "
-            "saved stories."
-        )
-
-    confirm_column, cancel_column = st.columns(2)
-
-    with confirm_column:
-        if st.button("Confirm", type="primary", use_container_width=True):
-
-            if action == "activate":
-                success, message = set_user_active(
-                    actor["id"], target["id"], True
-                )
-            elif action == "deactivate":
-                success, message = set_user_active(
-                    actor["id"], target["id"], False
-                )
-            elif action in {"promote", "demote"}:
-                success, message = set_user_role(
-                    actor["id"], target["id"], new_role
-                )
-            else:
-                success, message = delete_user(
-                    actor["id"], target["id"]
-                )
-
-            if success:
-                st.success(message)
-                st.rerun()
-
-            st.error(message)
-
-    with cancel_column:
-        if st.button("Cancel", use_container_width=True):
-            st.rerun()
-
-
-# -----------------------------
-# Authentication page
-# -----------------------------
-def authentication_page():
-
-    st.markdown(
-        """
-        <style>
-        .hero {
-            padding: 1.5rem 2rem;
-            border-radius: 1rem;
-            background: linear-gradient(135deg, #12355b 0%, #1d5d87 100%);
-            color: white;
-            margin-bottom: 1rem;
-        }
-        .hero h1 {
-            color: white;
-            font-size: 2.4rem;
-            margin-bottom: 0.5rem;
-        }
-        .hero p {
-            color: #e7f3fb;
-            font-size: 1rem;
-            line-height: 1.5;
-            margin-bottom: 0;
-        }
-        .section-card {
-            padding: 1rem 1.15rem;
-            border: 1px solid #dce6ee;
-            border-radius: 0.75rem;
-            min-height: 125px;
-            background: #f8fbfd;
-        }
-        .section-card h3 {
-            margin-top: 0;
-            color: #12355b;
-        }
-        .section-card p {
-            line-height: 1.45;
-            color: #425466;
-        }
-        </style>
-        <div class="hero">
-            <h1>📚 StoryBank</h1>
-            <p>
-                Generative storytelling for learning banking concepts.
-            </p>
+    render_html("""
+        <div class="sb-brand">
+            <div class="sb-logo">📚</div>
+            <div class="sb-brand-name">StoryBank</div>
         </div>
-        """,
-        unsafe_allow_html=True
+    """)
+
+
+# =========================================
+# DASHBOARD WELCOME
+# =========================================
+
+def dashboard_welcome(
+    title,
+    description,
+    label="YOUR LEARNING SPACE"
+):
+
+    render_html(f"""
+        <div class="sb-dashboard-hero">
+            <div class="sb-dashboard-label">{label}</div>
+            <h1>{title}</h1>
+            <p>{description}</p>
+        </div>
+    """)
+
+
+# =========================================
+# STORY GENERATION
+# =========================================
+
+def generate_story_panel(user, key_prefix):
+
+    st.markdown("## ✨ Create Your Banking Story")
+
+    st.caption(
+        "Choose three banking concepts and let Generative AI turn them "
+        "into an interesting learning experience."
     )
 
-    left_column, auth_column = st.columns([1.25, 0.95], gap="large")
+    try:
+        terms = get_terms()
 
-    with left_column:
-        st.subheader("Learn banking through memorable stories")
-        st.write(
-            "StoryBank is an educational generative AI application that "
-            "helps students, beginners, and curious learners understand "
-            "banking concepts through clear, engaging stories."
+    except Exception as exc:
+        st.error(f"Could not load banking terms: {exc}")
+        return
+
+    if len(terms) < 3:
+        st.warning("At least three banking terms are required.")
+        return
+
+    with st.container(border=True):
+
+        st.markdown("### 1. Select your banking concepts")
+
+        selected = st.multiselect(
+            "Choose exactly 3 banking terms",
+            terms,
+            max_selections=3,
+            key=f"{key_prefix}_terms",
+            placeholder="Search and select three terms...",
         )
 
-        st.write(
-            "Choose three concepts from a curated banking glossary, select "
-            "a genre and story length, and let StoryBank create a "
-            "personalised learning experience that explains each concept "
-            "in simple language."
+        st.caption(f"{len(selected)} of 3 terms selected")
+
+        st.divider()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            st.markdown("### 2. Choose your story genre")
+
+            genre = st.selectbox(
+                "Story genre",
+                [
+                    "Adventure",
+                    "Mystery",
+                    "Fantasy",
+                    "Comedy",
+                    "Educational",
+                ],
+                key=f"{key_prefix}_genre",
+            )
+
+        with col2:
+
+            st.markdown("### 3. Set your story length")
+
+            word_count = st.number_input(
+                "Number of words",
+                min_value=50,
+                max_value=1000,
+                value=200,
+                step=50,
+                key=f"{key_prefix}_count",
+            )
+
+        st.caption(
+            "Your story will use all three selected banking terms."
         )
 
-        information_columns = st.columns(2)
-
-        with information_columns[0]:
-            st.markdown(
-                """
-                <div class="section-card">
-                    <h3>What it does</h3>
-                    <p>
-                        Turns three banking concepts into an interesting
-                        story while keeping their meanings clear.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        with information_columns[1]:
-            st.markdown(
-                """
-                <div class="section-card">
-                    <h3>How it works</h3>
-                    <p>
-                        Uses glossary definitions to guide AI-generated
-                        stories tailored to your chosen genre and length.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        st.write("")
-        st.markdown(
-            """
-            <div class="section-card">
-                <h3>Why StoryBank?</h3>
-                <p>
-                    Stories make abstract financial ideas easier to
-                    understand, remember, discuss, and apply in everyday
-                    life. You can save your learning history and download
-                    stories for revision.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
+        generate_clicked = st.button(
+            "✨ Generate My Story",
+            type="primary",
+            use_container_width=True,
+            key=f"{key_prefix}_generate",
         )
 
-    with auth_column:
-        with st.container(border=True):
-            st.subheader("Start learning today")
-            st.caption(
-                "Log in, create an account, or reset your password."
-            )
-            login_tab, register_tab, reset_tab = st.tabs(
-                ["🔐 Login", "📝 Register", "🔑 Reset password"]
-            )
+    if generate_clicked:
 
-    with login_tab:
-        with st.form("login_form"):
+        if len(selected) != 3:
 
-            login_email = st.text_input(
-                "Email address",
-                key="login_email"
-            )
+            st.error("Please select exactly 3 banking terms.")
 
-            login_password = st.text_input(
-                "Password",
-                type="password",
-                key="login_password"
-            )
+        else:
 
-            login_button = st.form_submit_button(
-                "Login to StoryBank",
-                use_container_width=True
-            )
+            with st.spinner("Your AI story is being created..."):
 
-        if login_button:
+                try:
 
-            if not login_email or not login_password:
-
-                st.error("Please enter your email and password.")
-
-            else:
-
-                user = authenticate_user(
-                    login_email,
-                    login_password
-                )
-
-                if user:
-
-                    st.session_state.user = user
-
-                    record_login(user["id"])
-
-                    st.success("Login successful!")
-
-                    st.rerun()
-
-                else:
-
-                    st.error(
-                        "Invalid email or password, "
-                        "or your account is inactive."
+                    story = generate_story(
+                        selected,
+                        int(word_count),
+                        genre,
                     )
 
+                    if not story:
+
+                        st.error(
+                            "The AI returned an empty story. Please try again."
+                        )
+
+                    else:
+
+                        save_story(
+                            user["id"],
+                            selected,
+                            genre,
+                            int(word_count),
+                            story,
+                        )
+
+                        st.session_state.generated_story = story
+                        st.session_state.story_owner = user["id"]
+
+                        st.success(
+                            "Your story has been generated and saved!"
+                        )
+
+                except Exception as exc:
+
+                    st.error(f"Story generation failed: {exc}")
+
+    # DISPLAY GENERATED STORY
+
+    if (
+        st.session_state.generated_story
+        and st.session_state.story_owner == user["id"]
+    ):
+
+        st.markdown("## 📖 Your Generated Story")
+
+        with st.container(border=True):
+
+            st.markdown(st.session_state.generated_story)
+
+            st.download_button(
+                "⬇️ Download Story",
+                data=st.session_state.generated_story,
+                file_name="storybank_story.txt",
+                mime="text/plain",
+                use_container_width=True,
+                key=f"{key_prefix}_download",
+            )
+
+
+# =========================================
+# AUTHENTICATION PAGE
+# =========================================
+
+def authentication_page():
+
+    brand_header()
+
+    # WELCOME HERO
+    # WELCOME HERO
+
+    st.html("""
+        <section class="sb-hero">
+            <span class="sb-eyebrow">
+                ✦ GENERATIVE AI • LEARN DIFFERENTLY
+            </span>
+
+            <h1>Welcome to StoryBank!</h1>
+
+            <p>
+                <strong>Turn banking concepts into fascinating stories.</strong>
+                <br>
+                StoryBank makes learning banking concepts simple, creative
+                and enjoyable. Explore important financial terms through
+                unique stories created with Generative AI, even if you are
+                just beginning to learn about banking.
+            </p>
+
+            <div class="sb-hero-note">
+                Your learning journey begins with a story. ✨
+            </div>
+        </section>
+    """)
+
+    # HOW IT WORKS
+
+    render_html("""
+        <div class="sb-section-title">How StoryBank Works</div>
+        <div class="sb-section-sub">
+            Create your own learning story in four simple steps.
+        </div>
+    """)
+
+    steps = st.columns(4)
+
+    step_data = [
+        (
+            "01",
+            "Choose 3 Terms",
+            "Select three banking concepts you want to understand.",
+        ),
+        (
+            "02",
+            "Pick a Genre",
+            "Choose Adventure, Mystery, Fantasy, Comedy or Educational.",
+        ),
+        (
+            "03",
+            "Set Story Length",
+            "Decide how short or detailed your story should be.",
+        ),
+        (
+            "04",
+            "Generate & Learn",
+            "AI creates a unique story using your selected terms.",
+        ),
+    ]
+
+    for col, (number, heading, description) in zip(steps, step_data):
+
+        with col:
+
+            render_html(f"""
+                <div class="sb-step">
+                    <div class="sb-step-num">STEP {number}</div>
+                    <h3>{heading}</h3>
+                    <p>{description}</p>
+                </div>
+            """)
+
+    # FEATURES
+
+    render_html("""
+        <div class="sb-section-title">Why Learn With StoryBank?</div>
+        <div class="sb-section-sub">
+            A more engaging way to explore the world of banking.
+        </div>
+    """)
+
+    features = st.columns(3)
+
+    feature_data = [
+        (
+            "🤖",
+            "AI-Powered Stories",
+            "Generative AI turns selected banking terms into an original story.",
+        ),
+        (
+            "📖",
+            "Learn Through Context",
+            "Understand how banking concepts can be used in everyday situations.",
+        ),
+        (
+            "🎨",
+            "Your Choice, Your Story",
+            "Choose a genre and story length that suit your learning style.",
+        ),
+    ]
+
+    for col, (icon, heading, description) in zip(features, feature_data):
+
+        with col:
+
+            render_html(f"""
+                <div class="sb-feature">
+                    <div class="sb-feature-icon">{icon}</div>
+                    <h3>{heading}</h3>
+                    <p>{description}</p>
+                </div>
+            """)
+
+    # ACCOUNT SECTION
+
+    render_html("""
+        <div class="sb-auth-heading">Start Your StoryBank Journey</div>
+        <div class="sb-auth-sub">
+            Create your free account or log in to start generating banking stories.
+        </div>
+    """)
+
+    register_tab, login_tab, reset_tab = st.tabs(
+        [
+            "✨ Create Account",
+            "🔐 Login",
+            "Forgot Password",
+        ]
+    )
+
+    # CREATE ACCOUNT
+
     with register_tab:
+
+        st.markdown("#### Create Your StoryBank Account")
+
+        st.caption(
+            "Join StoryBank and start learning banking concepts through stories."
+        )
+
         with st.form("register_form"):
 
-            name = st.text_input("Full name")
-            email = st.text_input("Email address")
+            name = st.text_input(
+                "Full Name",
+                placeholder="Enter your full name",
+            )
+
+            email = st.text_input(
+                "Email Address",
+                placeholder="you@example.com",
+            )
 
             password = st.text_input(
                 "Password",
-                type="password"
+                type="password",
+                placeholder="Create a password",
             )
 
-            confirm_password = st.text_input(
-                "Confirm password",
-                type="password"
+            confirm = st.text_input(
+                "Confirm Password",
+                type="password",
+                placeholder="Re-enter your password",
             )
 
-            register_button = st.form_submit_button(
-                "Create free account",
-                use_container_width=True
+            submitted = st.form_submit_button(
+                "Create Account",
+                use_container_width=True,
+                type="primary",
             )
 
-        if register_button:
+        if submitted:
 
             if not name.strip() or not email.strip() or not password:
 
                 st.error("Please fill in all fields.")
 
-            elif password != confirm_password:
+            elif password != confirm:
 
                 st.error("Passwords do not match.")
 
             else:
 
-                success, message = register_user(
+                ok, message = register_user(
                     name.strip(),
                     email.strip(),
-                    password
+                    password,
                 )
 
-                if success:
+                if ok:
+
                     st.success(message)
 
+                    st.info(
+                        "Your account is ready. Open the Login tab to continue."
+                    )
+
                 else:
+
                     st.error(message)
 
-    with reset_tab:
+    # LOGIN
 
-        st.write(
-            "Reset your password securely with a one-time password."
+    with login_tab:
+
+        st.markdown("#### Welcome Back")
+
+        st.caption(
+            "Log in to continue creating and exploring your stories."
         )
 
-        reset_email = st.text_input(
-            "Registered email address",
-            key="forgot_email"
-        )
+        with st.form("login_form"):
 
-        if st.button(
-            "Send OTP",
-            use_container_width=True
-        ):
+            email = st.text_input(
+                "Email Address",
+                key="login_email",
+                placeholder="you@example.com",
+            )
 
-            if not reset_email.strip():
+            password = st.text_input(
+                "Password",
+                type="password",
+                key="login_password",
+                placeholder="Enter your password",
+            )
 
-                st.error("Please enter your email address.")
+            submitted = st.form_submit_button(
+                "Login to StoryBank",
+                use_container_width=True,
+                type="primary",
+            )
+
+        if submitted:
+
+            user = authenticate_user(email, password)
+
+            if user:
+
+                st.session_state.user = user
+
+                record_login(user["id"])
+
+                st.success("Login successful!")
+
+                st.rerun()
 
             else:
 
-                success, message = send_password_reset_otp(
-                    reset_email.strip()
+                st.error(
+                    "Invalid email/password, or your account is inactive."
                 )
 
-                if success:
+    # FORGOT PASSWORD
 
-                    st.session_state.reset_email = (
-                        reset_email.strip().lower()
-                    )
+    with reset_tab:
 
+        st.markdown("#### Reset Your Password")
+
+        st.caption(
+            "Enter your registered email address to receive a password reset OTP."
+        )
+
+        email = st.text_input(
+            "Registered Email",
+            key="forgot_email",
+            placeholder="you@example.com",
+        )
+
+        if st.button("Send OTP", use_container_width=True):
+
+            if not email.strip():
+
+                st.error("Enter your email address.")
+
+            else:
+
+                ok, message = send_password_reset_otp(
+                    email.strip()
+                )
+
+                if ok:
+
+                    st.session_state.reset_email = email.strip().lower()
                     st.session_state.otp_verified = False
 
                     st.success(message)
@@ -430,28 +921,22 @@ def authentication_page():
 
         if st.session_state.reset_email:
 
-            st.divider()
-
-            st.write(
-                "Enter the 6-digit OTP sent to your registered email."
-            )
-
             otp = st.text_input(
-                "Enter OTP",
+                "6-digit OTP",
                 max_chars=6,
-                key="reset_otp"
+                key="reset_otp",
             )
 
-            if st.button("Validate OTP"):
+            if st.button("Verify OTP", use_container_width=True):
 
-                success, message = verify_password_reset_otp(
+                ok, message = verify_password_reset_otp(
                     st.session_state.reset_email,
-                    otp
+                    otp,
                 )
 
-                if success:
+                st.session_state.otp_verified = ok
 
-                    st.session_state.otp_verified = True
+                if ok:
 
                     st.success(message)
 
@@ -461,40 +946,36 @@ def authentication_page():
 
             if st.session_state.otp_verified:
 
-                st.success(
-                    "OTP verified. Create a new password."
-                )
-
                 new_password = st.text_input(
-                    "New password",
+                    "New Password",
                     type="password",
-                    key="new_password"
+                    key="new_password",
                 )
 
-                confirm_new_password = st.text_input(
-                    "Confirm new password",
+                confirm = st.text_input(
+                    "Confirm New Password",
                     type="password",
-                    key="confirm_new_password"
+                    key="confirm_new_password",
                 )
 
-                if st.button("Reset Password"):
+                if st.button("Reset Password", use_container_width=True):
 
                     if not new_password:
 
-                        st.error("Please enter a new password.")
+                        st.error("Enter a new password.")
 
-                    elif new_password != confirm_new_password:
+                    elif new_password != confirm:
 
                         st.error("Passwords do not match.")
 
                     else:
 
-                        success, message = reset_password_with_verified_otp(
+                        ok, message = reset_password_with_verified_otp(
                             st.session_state.reset_email,
-                            new_password
+                            new_password,
                         )
 
-                        if success:
+                        if ok:
 
                             st.success(message)
 
@@ -505,158 +986,82 @@ def authentication_page():
 
                             st.error(message)
 
+    render_html("""
+        <div class="sb-footer">
+            StoryBank · Banking concepts made fun through AI-powered storytelling.
+        </div>
+    """)
 
-# -----------------------------
-# User dashboard
-# -----------------------------
+
+# =========================================
+# USER DASHBOARD
+# =========================================
+
 def user_dashboard(user):
 
-    st.title("📚 StoryBank")
+    with st.sidebar:
 
-    st.write(f"Welcome, **{user['name']}**!")
+        brand_header()
 
-    generate_tab, history_tab = st.tabs(
-        ["Generate Story", "My History"]
+        st.markdown("---")
+        st.markdown("### 👤 Your Account")
+
+        st.write(f"**{user['name']}**")
+        st.caption(user.get("email", ""))
+
+        st.markdown("---")
+        st.caption("STORYBANK MENU")
+
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True,
+            key="user_logout",
+        ):
+
+            logout()
+
+    dashboard_welcome(
+        f"Welcome, {user['name']}!",
+        "Your next banking lesson could be just one story away. "
+        "Choose your concepts and start learning.",
     )
 
-    # Generate story
+    generate_tab, history_tab, access_tab = st.tabs(
+        [
+            "✨ Generate Story",
+            "📚 My History",
+            "🛡️ Request Admin Access",
+        ]
+    )
+
+    # GENERATE STORY
+
     with generate_tab:
 
-        st.subheader("Generate Your Banking Story")
+        generate_story_panel(user, "user")
 
-        try:
+    # STORY HISTORY
 
-            banking_terms = get_terms()
-
-        except Exception as error:
-
-            st.error(
-                f"Could not load banking terms: {error}"
-            )
-
-            banking_terms = []
-
-        if not banking_terms:
-
-            st.warning(
-                "No banking terms were found in the dataset."
-            )
-
-        elif len(banking_terms) < 3:
-
-            st.warning(
-                "At least three banking terms are required."
-            )
-
-        else:
-
-            selected_terms = st.multiselect(
-                "Select exactly 3 banking terms",
-                options=banking_terms,
-                max_selections=3
-            )
-
-            genre = st.selectbox(
-                "Select story genre",
-                ["Adventure", "Mystery", "Fantasy"]
-            )
-
-            word_count = st.number_input(
-                "Story word count",
-                min_value=50,
-                max_value=1000,
-                value=200,
-                step=50
-            )
-
-            if st.button(
-                "Generate Story",
-                use_container_width=True
-            ):
-
-                if len(selected_terms) != 3:
-
-                    st.error(
-                        "Please select exactly 3 banking terms."
-                    )
-
-                else:
-
-                    with st.spinner(
-                        "Generating your story..."
-                    ):
-
-                        try:
-
-                            # Correct argument order:
-                            # selected_terms, word_count, genre
-
-                            story = generate_story(
-                                selected_terms,
-                                int(word_count),
-                                genre
-                            )
-
-                            if not story:
-
-                                st.error(
-                                    "The AI returned an empty story."
-                                )
-
-                            else:
-
-                                st.session_state.generated_story = story
-
-                                save_story(
-                                    user["id"],
-                                    selected_terms,
-                                    genre,
-                                    int(word_count),
-                                    story
-                                )
-
-                                st.success(
-                                    "Your story was generated!"
-                                )
-
-                        except Exception as error:
-
-                            st.error(
-                                f"Story generation failed: {error}"
-                            )
-
-            # Display generated story
-            if st.session_state.generated_story:
-
-                st.divider()
-
-                st.subheader("Your Generated Story")
-
-                st.write(
-                    st.session_state.generated_story
-                )
-
-                st.download_button(
-                    "Download Story",
-                    data=st.session_state.generated_story,
-                    file_name="my_banking_story.txt",
-                    mime="text/plain"
-                )
-
-    # Story history
     with history_tab:
 
-        st.subheader("My Story History")
+        st.markdown("## 📚 Your Story Library")
+
+        st.caption(
+            "View and download the stories you have generated."
+        )
 
         stories = get_user_stories(user["id"])
 
         if not stories:
 
             st.info(
-                "You have not generated any stories yet."
+                "You have not generated any stories yet. "
+                "Create your first story in the Generate Story tab!"
             )
 
         else:
+
+            st.success(f"You have generated {len(stories)} stories.")
 
             for story in stories:
 
@@ -666,265 +1071,402 @@ def user_dashboard(user):
                     genre,
                     count,
                     content,
-                    created_at
+                    created_at,
                 ) = story
 
                 with st.expander(
-                    f"Story {story_id} - {genre} - {created_at}"
+                    f"📖 Story {story_id} | {genre} | {created_at}"
                 ):
 
-                    st.write(
-                        f"**Banking terms:** {terms}"
-                    )
-
-                    st.write(
-                        f"**Genre:** {genre}"
-                    )
-
-                    st.write(
-                        f"**Word count:** {count}"
-                    )
+                    st.write(f"**Banking Terms:** {terms}")
+                    st.write(f"**Genre:** {genre}")
+                    st.write(f"**Word Count:** {count}")
 
                     st.divider()
 
-                    st.write(content)
+                    st.markdown(content)
 
                     st.download_button(
-                        "Download",
-                        data=content,
+                        "⬇️ Download Story",
+                        content,
                         file_name=f"story_{story_id}.txt",
                         mime="text/plain",
-                        key=f"download_{story_id}"
+                        use_container_width=True,
+                        key=f"user_story_{story_id}",
                     )
 
+    # ADMIN ACCESS REQUEST
 
-# -----------------------------
-# Admin dashboard
-# -----------------------------
-def admin_dashboard(user):
+    with access_tab:
 
-    role_title = (
-        "Super Administrator"
-        if user["role"] == "super_admin"
-        else "Administrator"
-    )
+        st.markdown("## 🛡️ Administrator Access")
 
-    st.title(f"🛠️ StoryBank {role_title} Dashboard")
+        st.caption(
+            "Request administrator privileges. An existing administrator "
+            "must review and approve your request."
+        )
 
-    st.write(
-        f"Welcome, **{user['name']}**"
-    )
+        current_request = get_user_admin_request(user["id"])
 
-    user_dashboard(user)
+        if (
+            current_request
+            and current_request.get("status") == "pending"
+        ):
 
-    st.divider()
-    st.subheader("Administration")
+            st.info(
+                "⏳ Your administrator access request is pending review."
+            )
 
-    users_tab, stories_tab, login_tab = st.tabs(
-        ["Manage Users", "All Stories", "Login History"]
-    )
+        elif (
+            current_request
+            and current_request.get("status") == "approved"
+        ):
 
-    # Manage users
-    with users_tab:
+            st.success(
+                "Your request was approved. Please log out and log in again."
+            )
 
-        st.subheader("Manage Registered Users")
+        elif (
+            current_request
+            and current_request.get("status") == "rejected"
+        ):
 
-        user_search = st.text_input(
-            "Search users",
-            placeholder="Search by name, email, or role",
-            key="admin_user_search"
-        ).strip().casefold()
+            st.warning(
+                "Your previous request was rejected. You may submit a new request."
+            )
 
-        users = [
-            account
-            for account in get_all_users()
-            if not user_search
-            or user_search in str(account[1]).casefold()
-            or user_search in str(account[2]).casefold()
-            or user_search in str(account[3]).casefold()
-        ]
+            if st.button(
+                "Request Again",
+                key="request_admin_again",
+                type="primary",
+            ):
 
-        if not users:
+                ok, message = request_admin_access(user["id"])
 
-            st.info("No users found.")
+                if ok:
+
+                    st.success(message)
+                    st.rerun()
+
+                else:
+
+                    st.error(message)
 
         else:
 
-            for account in users:
+            with st.container(border=True):
 
-                (
-                    user_id,
-                    name,
-                    email,
-                    role,
-                    is_active,
-                    created_at
-                ) = account
+                st.markdown("### Request Administrator Access")
 
-                target = {
-                    "id": user_id,
-                    "name": name,
-                    "role": role,
-                    "is_active": bool(is_active),
-                }
+                st.write(
+                    "Submit a request to the existing administrator. "
+                    "Your account role will only change after approval."
+                )
 
-                with st.container(border=True):
+                if st.button(
+                    "Submit Admin Access Request",
+                    type="primary",
+                    use_container_width=True,
+                ):
 
-                    col1, col2 = st.columns([2.5, 1.5])
+                    ok, message = request_admin_access(user["id"])
 
-                    with col1:
+                    if ok:
 
-                        st.write(f"**{name}**")
+                        st.success(message)
+                        st.rerun()
 
-                        st.write(email)
+                    else:
 
-                        st.write(f"Role: {role}")
+                        st.error(message)
 
-                        st.write(f"Created: {created_at}")
+    render_html("""
+        <div class="sb-footer">
+            StoryBank · Your personal banking story library.
+        </div>
+    """)
 
-                        if is_active:
-                            st.success("Active")
 
-                        else:
-                            st.error("Inactive")
+# =========================================
+# ADMIN DASHBOARD
+# =========================================
 
-                    with col2:
+def admin_dashboard(user):
 
-                        can_manage = (
-                            user["role"] == "super_admin"
-                            and role in {"admin", "user"}
-                        ) or (
-                            user["role"] == "admin"
-                            and role == "user"
-                        )
+    with st.sidebar:
 
-                        if can_manage:
+        brand_header()
 
-                            if st.button(
-                                "Manage",
-                                key=f"manage_{user_id}"
-                            ):
-                                st.session_state[
-                                    f"manage_open_{user_id}"
-                                ] = True
+        st.markdown("---")
+        st.markdown("### 🛠️ Administrator")
 
-                            if st.session_state.get(
-                                f"manage_open_{user_id}", False
-                            ):
-                                with st.popover(
-                                    "Account actions",
-                                    use_container_width=True
-                                ):
-                                    if role == "user":
-                                        if st.button(
-                                            "Promote to admin",
-                                            key=f"promote_{user_id}",
-                                            use_container_width=True
-                                        ):
-                                            st.session_state[
-                                                f"manage_open_{user_id}"
-                                            ] = False
-                                            confirm_account_action(
-                                                user,
-                                                target,
-                                                "promote",
-                                                "admin"
-                                            )
+        st.write(f"**{user['name']}**")
+        st.caption(user.get("email", ""))
 
-                                    if user["role"] == "super_admin" and is_active:
-                                        if st.button(
-                                            "Deactivate account",
-                                            key=f"deactivate_{user_id}",
-                                            use_container_width=True
-                                        ):
-                                            st.session_state[
-                                                f"manage_open_{user_id}"
-                                            ] = False
-                                            confirm_account_action(
-                                                user,
-                                                target,
-                                                "deactivate"
-                                            )
-                                    elif user["role"] == "super_admin":
-                                        if st.button(
-                                            "Activate account",
-                                            key=f"activate_{user_id}",
-                                            use_container_width=True
-                                        ):
-                                            st.session_state[
-                                                f"manage_open_{user_id}"
-                                            ] = False
-                                            confirm_account_action(
-                                                user,
-                                                target,
-                                                "activate"
-                                            )
+        st.markdown("---")
+        st.caption("ADMINISTRATOR MENU")
 
-                                    if (
-                                        role == "admin"
-                                        and user["role"] == "super_admin"
-                                    ):
-                                        if st.button(
-                                            "Change to user",
-                                            key=f"demote_{user_id}",
-                                            use_container_width=True
-                                        ):
-                                            st.session_state[
-                                                f"manage_open_{user_id}"
-                                            ] = False
-                                            confirm_account_action(
-                                                user,
-                                                target,
-                                                "demote",
-                                                "user"
-                                            )
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True,
+            key="admin_logout",
+        ):
 
-                                    if user["role"] == "super_admin":
-                                        if st.button(
-                                            "Delete account",
-                                            key=f"delete_{user_id}",
-                                            use_container_width=True
-                                        ):
-                                            st.session_state[
-                                                f"manage_open_{user_id}"
-                                            ] = False
-                                            confirm_account_action(
-                                                user,
-                                                target,
-                                                "delete"
-                                            )
+            logout()
 
-    # All stories
-    with stories_tab:
+    dashboard_welcome(
+        "Admin Dashboard",
+        "Manage StoryBank users, review access requests, "
+        "monitor story activity and generate banking stories.",
+        label="STORYBANK MANAGEMENT PORTAL",
+    )
 
-        st.subheader("All Generated Stories")
+    # DASHBOARD STATISTICS
 
-        story_search = st.text_input(
-            "Search story history",
-            placeholder="Search by user, email, genre, or banking term",
-            key="admin_story_search"
-        ).strip().casefold()
+    stats = get_dashboard_stats()
 
-        stories = [
-            story
-            for story in get_all_stories()
-            if not story_search
-            or story_search in str(story[1]).casefold()
-            or story_search in str(story[2]).casefold()
-            or story_search in str(story[3]).casefold()
-            or story_search in str(story[4]).casefold()
-            or story_search in str(story[6]).casefold()
-        ]
+    col1, col2, col3, col4 = st.columns(4)
 
-        if not stories:
+    col1.metric("Total Users", stats["total_users"])
+    col2.metric("Total Admins", stats["total_admins"])
+    col3.metric("Regular Users", stats["total_regular_users"])
+    col4.metric("Total Stories", stats["total_stories"])
 
-            st.info(
-                "No stories have been generated yet."
+    st.markdown(" ")
+
+    (
+        generate_tab,
+        activity_tab,
+        requests_tab,
+        users_tab,
+        stories_tab,
+        login_tab,
+    ) = st.tabs([
+        "✨ Generate Story",
+        "📊 User Activity",
+        "🛡️ Admin Requests",
+        "👥 Manage Users",
+        "📚 All Stories",
+        "🔐 Login History",
+    ])
+
+    # GENERATE STORY
+
+    with generate_tab:
+
+        generate_story_panel(user, "admin")
+
+    # USER ACTIVITY
+
+    with activity_tab:
+
+        st.markdown("## 📊 User Story Activity")
+
+        st.caption(
+            "Monitor how many stories each registered user has generated."
+        )
+
+        user_counts = get_user_story_counts()
+
+        if user_counts:
+
+            st.dataframe(
+                [
+                    {
+                        "User ID": row[0],
+                        "Name": row[1],
+                        "Email": row[2],
+                        "Role": row[3],
+                        "Active": "Yes" if row[4] else "No",
+                        "Stories Generated": row[5],
+                    }
+                    for row in user_counts
+                ],
+                use_container_width=True,
+                hide_index=True,
             )
 
         else:
 
-            for story in stories:
+            st.info("No user activity available yet.")
+
+    # ADMIN REQUESTS
+
+    with requests_tab:
+
+        st.markdown("## 🛡️ Administrator Access Requests")
+
+        st.caption(
+            "Review requests from users who want administrator access."
+        )
+
+        pending_requests = get_pending_admin_requests()
+
+        if pending_requests:
+
+            for request in pending_requests:
+
+                request_id, user_id, name, email, requested_at = request
+
+                with st.container(border=True):
+
+                    st.markdown(f"### 👤 {name}")
+                    st.write(f"**Email:** {email}")
+                    st.write(f"**User ID:** {user_id}")
+
+                    st.caption(f"Requested: {requested_at}")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+
+                        if st.button(
+                            "✓ Approve Request",
+                            key=f"approve_{request_id}",
+                            type="primary",
+                            use_container_width=True,
+                        ):
+
+                            success, message = review_admin_request(
+                                request_id,
+                                user["id"],
+                                "approved",
+                            )
+
+                            if success:
+
+                                st.success(message)
+
+                            else:
+
+                                st.error(message)
+
+                            st.rerun()
+
+                    with col2:
+
+                        if st.button(
+                            "✕ Reject Request",
+                            key=f"reject_{request_id}",
+                            use_container_width=True,
+                        ):
+
+                            success, message = review_admin_request(
+                                request_id,
+                                user["id"],
+                                "rejected",
+                            )
+
+                            if success:
+
+                                st.success(message)
+
+                            else:
+
+                                st.error(message)
+
+                            st.rerun()
+
+        else:
+
+            st.info("There are no pending administrator requests.")
+
+    # MANAGE USERS
+
+    with users_tab:
+
+        st.markdown("## 👥 Manage Registered Users")
+
+        st.caption(
+            "View user accounts and manage their active status."
+        )
+
+        all_users = get_all_users()
+
+        if all_users:
+
+            for row in all_users:
+
+                user_id, name, email, role, is_active, created_at = row
+
+                with st.container(border=True):
+
+                    col1, col2 = st.columns([3, 1])
+
+                    with col1:
+
+                        st.markdown(f"### {name}")
+
+                        st.write(email)
+
+                        st.caption(
+                            f"User ID: {user_id} | "
+                            f"Role: {role} | "
+                            f"Status: {'Active' if is_active else 'Inactive'}"
+                        )
+
+                        st.caption(f"Registered: {created_at}")
+
+                    with col2:
+
+                        if role == "user":
+
+                            if is_active:
+
+                                if st.button(
+                                    "Deactivate",
+                                    key=f"deactivate_{user_id}",
+                                    use_container_width=True,
+                                ):
+
+                                    set_user_active(user_id, False)
+
+                                    st.success("User deactivated.")
+
+                                    st.rerun()
+
+                            else:
+
+                                if st.button(
+                                    "Activate",
+                                    key=f"activate_{user_id}",
+                                    type="primary",
+                                    use_container_width=True,
+                                ):
+
+                                    set_user_active(user_id, True)
+
+                                    st.success("User activated.")
+
+                                    st.rerun()
+
+                        else:
+
+                            st.info("Administrator")
+
+        else:
+
+            st.info("No registered users found.")
+
+    # ALL STORIES
+
+    with stories_tab:
+
+        st.markdown("## 📚 All Generated Stories")
+
+        st.caption(
+            "View stories created by all StoryBank users."
+        )
+
+        all_stories = get_all_stories()
+
+        if all_stories:
+
+            st.success(
+                f"Total stories available: {len(all_stories)}"
+            )
+
+            for story in all_stories:
 
                 (
                     story_id,
@@ -934,58 +1476,79 @@ def admin_dashboard(user):
                     genre,
                     word_count,
                     content,
-                    created_at
+                    created_at,
                 ) = story
 
                 with st.expander(
-                    f"Story {story_id} - {name} - {genre}"
+                    f"📖 {name} | {genre} | {created_at}"
                 ):
 
                     st.write(f"**User:** {name}")
-
                     st.write(f"**Email:** {email}")
-
-                    st.write(f"**Terms:** {terms}")
-
+                    st.write(f"**Banking Terms:** {terms}")
                     st.write(f"**Genre:** {genre}")
-
-                    st.write(
-                        f"**Word count:** {word_count}"
-                    )
-
-                    st.write(f"**Date:** {created_at}")
+                    st.write(f"**Word Count:** {word_count}")
+                    st.write(f"**Created:** {created_at}")
 
                     st.divider()
 
-                    st.write(content)
+                    st.markdown(content)
 
-    # Login history
+                    st.download_button(
+                        "⬇️ Download Story",
+                        data=content,
+                        file_name=f"story_{story_id}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key=f"admin_download_{story_id}",
+                    )
+
+        else:
+
+            st.info("No stories have been generated yet.")
+
+    # LOGIN HISTORY
+
     with login_tab:
 
-        st.subheader("User Login History")
+        st.markdown("## 🔐 User Login History")
 
-        history = get_login_history()
+        st.caption(
+            "Review the login activity of StoryBank users."
+        )
 
-        if not history:
+        login_history = get_login_history()
 
-            st.info(
-                "No login history available."
+        if login_history:
+
+            st.dataframe(
+                [
+                    {
+                        "Name": row[0],
+                        "Email": row[1],
+                        "Login Time": row[2],
+                    }
+                    for row in login_history
+                ],
+                use_container_width=True,
+                hide_index=True,
             )
 
         else:
 
-            for name, email, login_time in history:
+            st.info("No login history available.")
 
-                st.write(
-                    f"**{name}** | {email} | {login_time}"
-                )
+    render_html("""
+        <div class="sb-footer">
+            StoryBank · Administrator Management Portal.
+        </div>
+    """)
 
-                st.divider()
 
+# =========================================
+# MAIN APPLICATION ROUTING
+# =========================================
 
-# -----------------------------
-# Main application
-# -----------------------------
 if st.session_state.user is None:
 
     authentication_page()
@@ -993,9 +1556,8 @@ if st.session_state.user is None:
 else:
 
     current_user = st.session_state.user
-    show_profile_sidebar(current_user)
 
-    if current_user["role"] in {"super_admin", "admin"}:
+    if current_user.get("role") == "admin":
 
         admin_dashboard(current_user)
 
@@ -1004,11 +1566,12 @@ else:
         user_dashboard(current_user)
 
 
-# -----------------------------
-# Footer
-# -----------------------------
+# =========================================
+# APPLICATION FOOTER
+# =========================================
+
 st.divider()
 
 st.caption(
-    "StoryBank | Banking concepts made fun through storytelling."
+    "📚 StoryBank · Banking concepts made fun through AI-powered storytelling."
 )
